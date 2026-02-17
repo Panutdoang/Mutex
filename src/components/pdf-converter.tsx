@@ -35,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 
 interface Transaction {
@@ -74,6 +75,7 @@ export default function PdfConverter() {
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [pendingData, setPendingData] = useState<ArrayBuffer | null>(null);
+  const [debugData, setDebugData] = useState<string | null>(null);
 
   useEffect(() => {
     const loadPdfJs = async () => {
@@ -94,9 +96,9 @@ export default function PdfConverter() {
   const parseBankStatement = useCallback((text: string) => {
     const lines = text.split("\n").filter(line => line.trim() !== '');
     const transactions: Transaction[] = [];
+    const debugInfo: any[] = [];
     let previousBalance: number | null = null;
     
-    // A more general date regex
     const dateRegex = /^\d{2}[\/.-]\d{2}(?:[\/.-]\d{2,4})?/;
     const numberRegex = /[\d,.-]+/g;
 
@@ -106,44 +108,57 @@ export default function PdfConverter() {
             const numbers = line.match(numberRegex);
             if (numbers && numbers.length > 0) {
                 previousBalance = parseCurrency(numbers[numbers.length - 1]);
-                break; // Found it, stop searching
+                debugInfo.push({ step: "Find Initial Balance", line, foundBalance: previousBalance });
+                break;
             }
         }
+    }
+     if (previousBalance === null) {
+      debugInfo.push({ step: "Find Initial Balance", error: "Could not find initial balance." });
     }
 
     // Second pass: process transactions
     for (const line of lines) {
       if (dateRegex.test(line)) {
+        const lineDebug: any = { originalLine: line };
+
         const dateMatch = line.match(dateRegex);
         if (!dateMatch) continue;
 
         const date = dateMatch[0].replace(/-/g, '/');
+        lineDebug.parsedDate = date;
         
         const numbers = line.match(numberRegex);
+        lineDebug.foundNumbersRaw = numbers;
         
         if (numbers && numbers.length >= 1) { // Need at least a balance
           const parsedNumbers = numbers.map(parseCurrency);
+          lineDebug.foundNumbersParsed = parsedNumbers;
+
           const saldo = parsedNumbers[parsedNumbers.length - 1];
+          lineDebug.determinedSaldo = saldo;
           
           let debit = 0;
           let kredit = 0;
           let amountIsGuessed = false;
+          
+          lineDebug.previousBalance = previousBalance;
 
           if (previousBalance !== null) {
             const diff = saldo - previousBalance;
-            const tolerance = 0.01; // For floating point inaccuracies
+            lineDebug.balanceDiff = diff;
+            const tolerance = 0.01;
             
             if (diff > tolerance) {
               kredit = diff;
             } else if (diff < -tolerance) {
               debit = -diff;
             }
-            // If diff is close to zero, debit and kredit remain 0
           } else {
-             // Fallback for the first transaction if no initial balance was found
+             amountIsGuessed = true;
+             lineDebug.warning = "No previous balance, guessing amount.";
              if (parsedNumbers.length >= 2) {
                 const amount = parsedNumbers[parsedNumbers.length - 2];
-                amountIsGuessed = true;
                 if (line.toUpperCase().includes('CR')) {
                     kredit = amount;
                 } else {
@@ -151,28 +166,32 @@ export default function PdfConverter() {
                 }
              }
           }
+          lineDebug.calculatedDebit = debit;
+          lineDebug.calculatedKredit = kredit;
 
-          // Refine the calculated amount to match an actual number on the line
-          // This corrects for floating point inaccuracies
           if (!amountIsGuessed && (debit > 0 || kredit > 0)) {
             const actualAmount = debit > 0 ? debit : kredit;
             const transactionCandidates = parsedNumbers.slice(0, parsedNumbers.length - 1);
+            lineDebug.amountCandidates = transactionCandidates;
             
             const closestMatch = transactionCandidates.find(p => Math.abs(p - actualAmount) < 0.01);
+            lineDebug.closestMatchToAmount = closestMatch;
             
             if (closestMatch !== undefined) {
                 if (debit > 0) debit = closestMatch;
                 if (kredit > 0) kredit = closestMatch;
             }
           }
+          lineDebug.refinedDebit = debit;
+          lineDebug.refinedKredit = kredit;
 
           let description = line;
-          // Remove date and numbers to get description
           description = description.replace(dateRegex, '').trim();
           numbers.forEach(numStr => {
             description = description.replace(numStr, '');
           });
           description = description.replace(/\s+(CR|DB)\s*$/i, '').trim().replace(/\s{2,}/g, ' ');
+          lineDebug.finalDescription = description;
 
           transactions.push({
             Tanggal: date,
@@ -184,8 +203,12 @@ export default function PdfConverter() {
 
           previousBalance = saldo;
         }
+        debugInfo.push(lineDebug);
       }
     }
+    
+    setDebugData(JSON.stringify(debugInfo, null, 2));
+
     if (transactions.length === 0) {
         setError("No transactions could be automatically extracted. The PDF format might not be supported or it might be a scanned image.");
     } else {
@@ -203,6 +226,7 @@ export default function PdfConverter() {
     setIsLoading(true);
     setError(null);
     setData([]);
+    setDebugData(null);
 
     try {
         const pdfDataCopy = pdfData.slice(0);
@@ -251,6 +275,7 @@ export default function PdfConverter() {
     setIsLoading(true);
     setError(null);
     setData([]);
+    setDebugData(null);
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -259,7 +284,8 @@ export default function PdfConverter() {
             setIsLoading(false);
             return;
         }
-        await parsePdf(e.target.result as ArrayBuffer);
+        const fileData = e.target.result as ArrayBuffer;
+        await parsePdf(fileData.slice(0));
     };
     reader.onerror = () => {
         setError("Error reading file.");
@@ -424,6 +450,20 @@ export default function PdfConverter() {
             </div>
           </div>
         )}
+        
+        {debugData && !isLoading && (
+          <Accordion type="single" collapsible className="w-full pt-4">
+            <AccordionItem value="item-1">
+              <AccordionTrigger>Tampilkan Analisa JSON Sementara</AccordionTrigger>
+              <AccordionContent>
+                <pre className="mt-2 w-full overflow-auto rounded-md bg-slate-800 p-4 text-sm text-white">
+                  <code>{debugData}</code>
+                </pre>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        )}
+
       </CardContent>
 
       <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
