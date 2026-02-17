@@ -46,30 +46,38 @@ interface Transaction {
 }
 
 const parseCurrency = (value: string): number => {
-  if (!value) return 0;
-  // Standardize to use '.' as decimal separator and remove thousand separators
-  const standard = value.replace(/\s/g, ''); // remove spaces
-  const lastDot = standard.lastIndexOf('.');
-  const lastComma = standard.lastIndexOf(',');
+    if (!value) return 0;
+    const standard = value.replace(/\s/g, '');
+    const hasComma = standard.includes(',');
+    const hasDot = standard.includes('.');
 
-  if (lastComma > lastDot) {
-    // Indonesian format: 1.234,56 -> 1234.56
-    return parseFloat(standard.replace(/\./g, '').replace(',', '.'));
-  } else if (lastDot > lastComma) {
-    // US format: 1,234.56 -> 1234.56
-    return parseFloat(standard.replace(/,/g, ''));
-  } else {
-    // No separators or only one kind (e.g. 1,234)
-    const cleaned = standard.replace(/,/g, '');
-    if (cleaned.includes('.')) {
-        return parseFloat(cleaned);
+    // If no separators, or only one type that isn't a decimal separator for sure
+    if (!hasComma && !hasDot) return parseFloat(standard);
+    
+    // Only commas, treat as thousand separators (e.g., 1,234,567)
+    if (hasComma && !hasDot) return parseFloat(standard.replace(/,/g, ''));
+    
+    // Only dots, could be ambiguous (1.234 vs 1.23)
+    if (hasDot && !hasComma) {
+        // If more than 2 digits after the last dot, it's likely a thousands separator (e.g. 1.234.567)
+        if (standard.substring(standard.lastIndexOf('.') + 1).length > 2) {
+            return parseFloat(standard.replace(/\./g, ''));
+        }
+        // Otherwise, it's likely a decimal separator (e.g. 123.45)
+        return parseFloat(standard);
     }
-    // Handle cases like "1.234" which is common in ID
-    if (standard.includes('.') && !standard.includes(',')){
-        return parseFloat(standard.replace(/\./g, ''));
+
+    // Both comma and dot exist, determine format by last separator
+    const lastDot = standard.lastIndexOf('.');
+    const lastComma = standard.lastIndexOf(',');
+
+    if (lastComma > lastDot) {
+      // Indonesian format: 1.234,56
+      return parseFloat(standard.replace(/\./g, '').replace(',', '.'));
+    } else {
+      // US format: 1,234.56
+      return parseFloat(standard.replace(/,/g, ''));
     }
-    return parseFloat(cleaned);
-  }
 };
 
 export default function PdfConverter() {
@@ -78,7 +86,7 @@ export default function PdfConverter() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<Transaction[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [pdfjs, setPdfjs] = useState<typeof import("pdfjs-dist") | null>(null);
+  const [pdfjs, setPdfjs] = useState<any>(null);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -103,100 +111,84 @@ export default function PdfConverter() {
   }, []);
 
   const parseBankStatement = useCallback((text: string) => {
-    const lines = text.split("\n").filter(line => line.trim() !== '');
+    const allLines = text.split('\n');
     const transactions: Transaction[] = [];
-    let previousBalance: number | null = null;
-    
-    const dateRegex = /^\d{2}[\/.-]\d{2}(?:[\/.-]\d{2,4})?/;
-    const numberRegex = /[\d,.-]+/g;
 
-    // First pass: find initial balance
-    for (const line of lines) {
-        if (/SALDO AWAL|Previous Balance/i.test(line)) {
-            const numbers = line.match(numberRegex);
-            if (numbers && numbers.length > 0) {
-                previousBalance = parseCurrency(numbers[numbers.length - 1]);
-                break;
+    const dateRegex = /^(\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4})/;
+    
+    // Find transaction blocks first
+    const blocks: string[] = [];
+    let currentBlock: string[] = [];
+    let inHeader = true;
+
+    for (const line of allLines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        
+        // Skip header lines until we see the first transaction date
+        if (inHeader && !dateRegex.test(trimmed)) {
+            continue;
+        }
+        
+        // This is the start of the first or a new transaction
+        if (dateRegex.test(trimmed)) {
+            inHeader = false; // We are now in the transaction list
+            if (currentBlock.length > 0) {
+                blocks.push(currentBlock.join(' '));
             }
+            currentBlock = [trimmed];
+        } else if (!inHeader) {
+            // Ignore common page footers and headers that might appear mid-page
+            if (trimmed.startsWith('PT Bank Negara Indonesia') || /^\d+ dari \d+$/.test(trimmed) || trimmed.startsWith('Laporan Mutasi Rekening') || trimmed.startsWith('Periode:') || trimmed.startsWith('Tanggal & Waktu')) {
+                continue;
+            }
+            currentBlock.push(trimmed);
+        }
+    }
+    // Add the last block
+    if (currentBlock.length > 0) {
+        blocks.push(currentBlock.join(' '));
+    }
+    
+    for (const block of blocks) {
+        try {
+            const dateMatch = block.match(dateRegex);
+            if (!dateMatch) continue;
+
+            const date = dateMatch[1];
+            
+            // For BNI, the amounts are together, like `+28,620,000 48,068,577` or `-2,500 33,866,077`
+            const amountMatch = block.match(/([+-][\d,.]+) ([\d,.]+)/);
+            if (!amountMatch) continue;
+
+            const nominalString = amountMatch[1];
+            const saldoString = amountMatch[2];
+
+            const debit = nominalString.startsWith('-') ? parseCurrency(nominalString.substring(1)) : 0;
+            const kredit = nominalString.startsWith('+') ? parseCurrency(nominalString.substring(1)) : 0;
+            const saldo = parseCurrency(saldoString);
+
+            let description = block;
+            description = description.replace(dateRegex, ''); // remove date
+            description = description.replace(amountMatch[0], ''); // remove amounts
+            description = description.replace(/\d{2}:\d{2}:\d{2} WIB/, ''); // remove time
+            description = description.trim().replace(/\s{2,}/g, ' ');
+
+            transactions.push({
+                Tanggal: date,
+                Deskripsi: description,
+                Debit: debit,
+                Kredit: kredit,
+                Saldo: saldo,
+            });
+
+        } catch (e) {
+            console.error("Failed to parse block:", block, e);
+            continue;
         }
     }
 
-    // Second pass: process transactions
-    for (const line of lines) {
-      if (dateRegex.test(line)) {
-        const dateMatch = line.match(dateRegex);
-        if (!dateMatch) continue;
-
-        const date = dateMatch[0].replace(/-/g, '/');
-        
-        const numbers = line.match(numberRegex);
-        
-        if (numbers && numbers.length >= 1) { // Need at least a balance
-          const parsedNumbers = numbers.map(parseCurrency);
-
-          const saldo = parsedNumbers[parsedNumbers.length - 1];
-          
-          let debit = 0;
-          let kredit = 0;
-          let amountIsGuessed = false;
-          
-          if (previousBalance !== null) {
-            const diff = saldo - previousBalance;
-            const tolerance = 0.01;
-            
-            if (diff > tolerance) {
-              kredit = diff;
-            } else if (diff < -tolerance) {
-              debit = -diff;
-            }
-          } else {
-             amountIsGuessed = true;
-             if (parsedNumbers.length >= 2) {
-                const amount = parsedNumbers[parsedNumbers.length - 2];
-                if (line.toUpperCase().includes('CR')) {
-                    kredit = amount;
-                } else {
-                    debit = amount; // Default to debit
-                }
-             }
-          }
-
-          if (!amountIsGuessed && (debit > 0 || kredit > 0)) {
-            const actualAmount = debit > 0 ? debit : kredit;
-            const transactionCandidates = parsedNumbers.slice(0, parsedNumbers.length - 1);
-            
-            const closestMatch = transactionCandidates.find(p => Math.abs(p - actualAmount) < 0.01);
-            
-            if (closestMatch !== undefined) {
-                if (debit > 0) debit = closestMatch;
-                if (kredit > 0) kredit = closestMatch;
-            }
-          }
-
-          let description = line;
-          description = description.replace(dateRegex, '').trim();
-          numbers.forEach(numStr => {
-            description = description.replace(numStr, '');
-          });
-          description = description.replace(/\s+(CR|DB)\s*$/i, '').trim().replace(/\s{2,}/g, ' ');
-
-          transactions.push({
-            Tanggal: date,
-            Deskripsi: description || "N/A",
-            Debit: debit,
-            Kredit: kredit,
-            Saldo: saldo
-          });
-
-          previousBalance = saldo;
-        }
-      }
-    }
-    
-    if (transactions.length > 0) {
-        setData(transactions);
-        setError(null);
-    }
+    setData(transactions);
     setIsLoading(false);
   }, []);
 
