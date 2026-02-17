@@ -92,64 +92,105 @@ export default function PdfConverter() {
   }, []);
 
   const parseBankStatement = useCallback((text: string) => {
-    const lines = text.split("\n");
+    const lines = text.split("\n").filter(line => line.trim() !== '');
     const transactions: Transaction[] = [];
+    let previousBalance: number | null = null;
     
-    const dateRegex = /^(\d{2}[\/.-]\d{2}[\/.-]\d{2,4})/;
-    const numberRegex = /[\d.,]+(?:[ \t](?:CR|DB))?/g;
+    // A more general date regex
+    const dateRegex = /^\d{2}[\/.-]\d{2}(?:[\/.-]\d{2,4})?/;
+    const numberRegex = /[\d,.-]+/g;
 
+    // First pass: find initial balance
+    for (const line of lines) {
+        if (/SALDO AWAL|Previous Balance/i.test(line)) {
+            const numbers = line.match(numberRegex);
+            if (numbers && numbers.length > 0) {
+                previousBalance = parseCurrency(numbers[numbers.length - 1]);
+                break; // Found it, stop searching
+            }
+        }
+    }
+
+    // Second pass: process transactions
     for (const line of lines) {
       if (dateRegex.test(line)) {
         const dateMatch = line.match(dateRegex);
-        const date = dateMatch ? dateMatch[0] : "";
+        if (!dateMatch) continue;
+
+        const date = dateMatch[0].replace(/-/g, '/');
         
         const numbers = line.match(numberRegex);
-
-        if (numbers && numbers.length >= 2) {
-          let description = line.replace(dateRegex, '').trim();
-          numbers.forEach(num => {
-            description = description.replace(num, '').trim();
-          });
-          description = description.replace(/\s{2,}/g, ' ').trim();
-
-          const numericValues = numbers.map(parseCurrency);
+        
+        if (numbers && numbers.length >= 1) { // Need at least a balance
+          const parsedNumbers = numbers.map(parseCurrency);
+          const saldo = parsedNumbers[parsedNumbers.length - 1];
           
-          if (numericValues.length > 0) {
-            const saldo = numericValues[numericValues.length-1];
-            let debit = 0;
-            let kredit = 0;
+          let debit = 0;
+          let kredit = 0;
+          let amountIsGuessed = false;
 
-            if (numericValues.length > 1) {
-                const amount = numericValues[numericValues.length-2];
-                 if(numericValues.length >= 3){
-                    debit = numericValues[numericValues.length-3];
-                    kredit = numericValues[numericValues.length-2];
-                 } else {
-                    if (line.toUpperCase().includes("DB") || line.includes("DEBET")) {
-                        debit = amount;
-                    } else if (line.toUpperCase().includes("CR") || line.toUpperCase().includes("KREDIT")) {
-                        kredit = amount;
-                    } else {
-                       debit = amount;
-                    }
-                 }
-            }
+          if (previousBalance !== null) {
+            const diff = saldo - previousBalance;
+            const tolerance = 0.01; // For floating point inaccuracies
             
-            transactions.push({
-              Tanggal: date,
-              Deskripsi: description || "N/A",
-              Debit: debit,
-              Kredit: kredit,
-              Saldo: saldo
-            });
+            if (diff > tolerance) {
+              kredit = diff;
+            } else if (diff < -tolerance) {
+              debit = -diff;
+            }
+            // If diff is close to zero, debit and kredit remain 0
+          } else {
+             // Fallback for the first transaction if no initial balance was found
+             if (parsedNumbers.length >= 2) {
+                const amount = parsedNumbers[parsedNumbers.length - 2];
+                amountIsGuessed = true;
+                if (line.toUpperCase().includes('CR')) {
+                    kredit = amount;
+                } else {
+                    debit = amount; // Default to debit
+                }
+             }
           }
+
+          // Refine the calculated amount to match an actual number on the line
+          // This corrects for floating point inaccuracies
+          if (!amountIsGuessed && (debit > 0 || kredit > 0)) {
+            const actualAmount = debit > 0 ? debit : kredit;
+            const transactionCandidates = parsedNumbers.slice(0, parsedNumbers.length - 1);
+            
+            const closestMatch = transactionCandidates.find(p => Math.abs(p - actualAmount) < 0.01);
+            
+            if (closestMatch !== undefined) {
+                if (debit > 0) debit = closestMatch;
+                if (kredit > 0) kredit = closestMatch;
+            }
+          }
+
+          let description = line;
+          // Remove date and numbers to get description
+          description = description.replace(dateRegex, '').trim();
+          numbers.forEach(numStr => {
+            description = description.replace(numStr, '');
+          });
+          description = description.replace(/\s+(CR|DB)\s*$/i, '').trim().replace(/\s{2,}/g, ' ');
+
+          transactions.push({
+            Tanggal: date,
+            Deskripsi: description || "N/A",
+            Debit: debit,
+            Kredit: kredit,
+            Saldo: saldo
+          });
+
+          previousBalance = saldo;
         }
       }
     }
     if (transactions.length === 0) {
-        setError("No transactions could be automatically extracted. The PDF format might not be supported.");
+        setError("No transactions could be automatically extracted. The PDF format might not be supported or it might be a scanned image.");
+    } else {
+        setData(transactions);
     }
-    setData(transactions);
     setIsLoading(false);
   }, []);
 
@@ -164,9 +205,6 @@ export default function PdfConverter() {
     setData([]);
 
     try {
-        // Create a copy of the ArrayBuffer to pass to pdf.js.
-        // This prevents the original `pdfData` from being "detached" by the library,
-        // which would make it unusable if we need to ask for a password and retry.
         const pdfDataCopy = pdfData.slice(0);
         const typedArray = new Uint8Array(pdfDataCopy);
         const pdf = await pdfjs.getDocument({ data: typedArray, password: filePassword }).promise;
@@ -186,8 +224,6 @@ export default function PdfConverter() {
     } catch (err: any) {
         setIsLoading(false);
         if (err.name === 'PasswordException') {
-            // The original `pdfData` is still valid here. We save a copy to the state
-            // so the user can enter a password and we can try parsing again.
             setPendingData(pdfData.slice(0));
             setIsPasswordDialogOpen(true);
             if (filePassword) {
