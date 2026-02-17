@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useCallback, DragEvent, useRef, useEffect } from "react";
+import { useState, useCallback, DragEvent, useRef, useEffect, FormEvent } from "react";
 import * as XLSX from "xlsx";
 import {
   UploadCloud,
-  FileText,
   Loader2,
   Download,
   AlertCircle,
@@ -27,6 +26,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 interface Transaction {
@@ -51,6 +59,9 @@ export default function PdfConverter() {
   const [data, setData] = useState<Transaction[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pdfjs, setPdfjs] = useState<typeof import("pdfjs-dist") | null>(null);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [pendingData, setPendingData] = useState<ArrayBuffer | null>(null);
 
   useEffect(() => {
     const loadPdfJs = async () => {
@@ -72,9 +83,6 @@ export default function PdfConverter() {
     const lines = text.split("\n");
     const transactions: Transaction[] = [];
     
-    // Very basic regex to find potential transaction lines.
-    // This looks for a line starting with a date, followed by text, and at least two numbers.
-    // This will need to be adjusted for specific bank statement formats.
     const dateRegex = /^(\d{2}[\/.-]\d{2}[\/.-]\d{2,4})/;
     const numberRegex = /[\d.,]+(?:[ \t](?:CR|DB))?/g;
 
@@ -86,7 +94,6 @@ export default function PdfConverter() {
         const numbers = line.match(numberRegex);
 
         if (numbers && numbers.length >= 2) {
-          // Heuristic: remove date and numbers to get description
           let description = line.replace(dateRegex, '').trim();
           numbers.forEach(num => {
             description = description.replace(num, '').trim();
@@ -95,8 +102,6 @@ export default function PdfConverter() {
 
           const numericValues = numbers.map(parseCurrency);
           
-          // Assumption: Last number is balance, second to last is credit/debit amount.
-          // This is a common but not universal pattern.
           if (numericValues.length > 0) {
             const saldo = numericValues[numericValues.length-1];
             let debit = 0;
@@ -104,24 +109,15 @@ export default function PdfConverter() {
 
             if (numericValues.length > 1) {
                 const amount = numericValues[numericValues.length-2];
-                // Check for common patterns like credit/debit being in specific positions or having signs.
-                // A simple guess: if balance decreases, it's a debit. If it increases, it's credit.
-                // This requires tracking previous balance, which adds complexity.
-                // Simpler for now: Check for "DB"/"CR" hints or assume one column is for debit, one for credit.
-                // Let's assume two amount columns: DEBIT and KREDIT.
                  if(numericValues.length >= 3){
                     debit = numericValues[numericValues.length-3];
                     kredit = numericValues[numericValues.length-2];
                  } else {
-                    // If only one amount column, we need to guess. A common pattern is positive for credit, negative for debit.
-                    // Or check for 'CR' 'DB' text which we stripped. Let's re-check original text.
                     if (line.toUpperCase().includes("DB") || line.includes("DEBET")) {
                         debit = amount;
                     } else if (line.toUpperCase().includes("CR") || line.toUpperCase().includes("KREDIT")) {
                         kredit = amount;
                     } else {
-                       // If no clear indicator, we'll put it in debit for now.
-                       // This is a good place for future improvement.
                        debit = amount;
                     }
                  }
@@ -145,7 +141,50 @@ export default function PdfConverter() {
     setIsLoading(false);
   }, []);
 
-  const processFile = useCallback(async (file: File) => {
+  const parsePdf = useCallback(async (pdfData: ArrayBuffer, filePassword?: string) => {
+    if (!pdfjs) {
+        setError("PDF library is still loading. Please try again in a moment.");
+        return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    setData([]);
+
+    try {
+        const typedArray = new Uint8Array(pdfData);
+        const pdf = await pdfjs.getDocument({ data: typedArray, password: filePassword }).promise;
+
+        let fullText = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          fullText += textContent.items.map((item) => ('str' in item ? item.str : '')).join(" ") + "\n";
+        }
+
+        parseBankStatement(fullText);
+        setIsPasswordDialogOpen(false);
+        setPendingData(null);
+        setPassword("");
+
+    } catch (err: any) {
+        setIsLoading(false);
+        if (err.name === 'PasswordException') {
+            setPendingData(pdfData);
+            setIsPasswordDialogOpen(true);
+            if (filePassword) {
+                setError("Password salah. Silakan coba lagi.");
+            } else {
+                setError("File ini dilindungi password. Silakan masukkan password.");
+            }
+        } else {
+            console.error(err);
+            setError("An error occurred while parsing the PDF.");
+        }
+    }
+  }, [pdfjs, parseBankStatement]);
+
+  const processFile = useCallback((file: File) => {
     if (!pdfjs) {
       setError("PDF library is still loading. Please try again in a moment.");
       return;
@@ -159,38 +198,28 @@ export default function PdfConverter() {
     setError(null);
     setData([]);
 
-    try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
         if (!e.target?.result) {
             setError("Could not read the file.");
             setIsLoading(false);
             return;
         }
-
-        const typedArray = new Uint8Array(e.target.result as ArrayBuffer);
-        const pdf = await pdfjs.getDocument({ data: typedArray }).promise;
-        let fullText = "";
-
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
-          fullText += textContent.items.map((item) => ('str' in item ? item.str : '')).join(" ") + "\n";
-        }
-
-        parseBankStatement(fullText);
-      };
-      reader.onerror = () => {
+        await parsePdf(e.target.result as ArrayBuffer);
+    };
+    reader.onerror = () => {
         setError("Error reading file.");
         setIsLoading(false);
-      }
-      reader.readAsArrayBuffer(file);
-    } catch (err) {
-      console.error(err);
-      setError("An error occurred while parsing the PDF.");
-      setIsLoading(false);
     }
-  }, [pdfjs, parseBankStatement]);
+    reader.readAsArrayBuffer(file);
+  }, [pdfjs, parsePdf]);
+
+  const handlePasswordSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (pendingData) {
+      parsePdf(pendingData, password);
+    }
+  };
 
   const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -232,7 +261,6 @@ export default function PdfConverter() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Mutasi");
     
-    // Auto-size columns
     const cols = Object.keys(data[0]);
     const colWidths = cols.map(col => ({
       wch: Math.max(...data.map(row => row[col as keyof Transaction]?.toString().length ?? 0), col.length)
@@ -291,7 +319,7 @@ export default function PdfConverter() {
           </div>
         )}
 
-        {error && (
+        {error && !isPasswordDialogOpen && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
@@ -343,6 +371,33 @@ export default function PdfConverter() {
           </div>
         )}
       </CardContent>
+
+      <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <form onSubmit={handlePasswordSubmit}>
+            <DialogHeader>
+              <DialogTitle>Password Diperlukan</DialogTitle>
+              <DialogDescription>
+                {error}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Masukkan password..."
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={() => setIsPasswordDialogOpen(false)}>Batal</Button>
+              <Button type="submit">Buka</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
