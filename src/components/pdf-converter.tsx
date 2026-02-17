@@ -6,7 +6,8 @@ import {
   UploadCloud,
   Loader2,
   Download,
-  AlertCircle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
@@ -60,7 +60,15 @@ const parseCurrency = (value: string): number => {
     return parseFloat(standard.replace(/,/g, ''));
   } else {
     // No separators or only one kind (e.g. 1,234)
-    return parseFloat(standard.replace(/,/g, ''));
+    const cleaned = standard.replace(/,/g, '');
+    if (cleaned.includes('.')) {
+        return parseFloat(cleaned);
+    }
+    // Handle cases like "1.234" which is common in ID
+    if (standard.includes('.') && !standard.includes(',')){
+        return parseFloat(standard.replace(/\./g, ''));
+    }
+    return parseFloat(cleaned);
   }
 };
 
@@ -73,6 +81,7 @@ export default function PdfConverter() {
   const [pdfjs, setPdfjs] = useState<typeof import("pdfjs-dist") | null>(null);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [pendingData, setPendingData] = useState<ArrayBuffer | null>(null);
   const [rawPdfText, setRawPdfText] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -461,6 +470,11 @@ export default function PdfConverter() {
             </div>
           </div>
         )}
+
+        {!isLoading && rawPdfText && data.length === 0 && (
+            <div className="w-full space-y-2 pt-4">
+            </div>
+        )}
       </CardContent>
 
       <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
@@ -473,14 +487,29 @@ export default function PdfConverter() {
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Masukkan password..."
-                autoFocus
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Masukkan password..."
+                  autoFocus
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute inset-y-0 right-0 flex items-center h-full px-3"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  <span className="sr-only">
+                    {showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                  </span>
+                </Button>
+              </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => {
