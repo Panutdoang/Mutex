@@ -50,12 +50,12 @@ export default function PdfConverter() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<Transaction[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [pdfjs, setPdfjs] = useState<typeof import("pdfjs-dist/build/pdf.mjs") | null>(null);
+  const [pdfjs, setPdfjs] = useState<typeof import("pdfjs-dist") | null>(null);
 
   useEffect(() => {
     const loadPdfJs = async () => {
         try {
-            const pdfjsModule = await import("pdfjs-dist/build/pdf.mjs");
+            const pdfjsModule = await import("pdfjs-dist");
             pdfjsModule.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsModule.version}/build/pdf.worker.min.mjs`;
             setPdfjs(pdfjsModule);
         } catch (e) {
