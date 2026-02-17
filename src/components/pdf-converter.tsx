@@ -119,33 +119,41 @@ export default function PdfConverter() {
     // Find transaction blocks first
     const blocks: string[] = [];
     let currentBlock: string[] = [];
-    let inHeader = true;
+    let inTransactionSection = false;
+
+    // Markers for lines to ignore completely (headers/footers)
+    const ignoreMarkers = [
+        'PT Bank Negara Indonesia',
+        'Laporan Mutasi Rekening',
+        'Periode:',
+        'Tanggal & Waktu',
+        'Saldo Akhir',
+        'Informasi Lainnya'
+    ];
 
     for (const line of allLines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
-        
-        // Skip header lines until we see the first transaction date
-        if (inHeader && !dateRegex.test(trimmed)) {
+
+        // Ignore headers/footers anywhere in the document
+        if (ignoreMarkers.some(marker => trimmed.startsWith(marker)) || /^\d+ dari \d+$/.test(trimmed)) {
             continue;
         }
-        
-        // This is the start of the first or a new transaction
+
+        // The first date marks the beginning of the transaction list
         if (dateRegex.test(trimmed)) {
-            inHeader = false; // We are now in the transaction list
+            inTransactionSection = true;
+            // If we have a block, push it and start a new one
             if (currentBlock.length > 0) {
                 blocks.push(currentBlock.join(' '));
             }
             currentBlock = [trimmed];
-        } else if (!inHeader) {
-            // Ignore common page footers and headers that might appear mid-page
-            if (trimmed.startsWith('PT Bank Negara Indonesia') || /^\d+ dari \d+$/.test(trimmed) || trimmed.startsWith('Laporan Mutasi Rekening') || trimmed.startsWith('Periode:') || trimmed.startsWith('Tanggal & Waktu')) {
-                continue;
-            }
+        } else if (inTransactionSection) {
+            // If we are in the transaction section, append the line to the current block
             currentBlock.push(trimmed);
         }
     }
-    // Add the last block
+    // Add the last block if it exists
     if (currentBlock.length > 0) {
         blocks.push(currentBlock.join(' '));
     }
