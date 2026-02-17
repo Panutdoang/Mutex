@@ -235,9 +235,38 @@ export default function PdfConverter() {
 
         let fullText = "";
         for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
-          fullText += textContent.items.map((item) => ('str' in item ? item.str : '')).join(" ") + "\n";
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            if (!textContent.items) {
+                continue;
+            }
+
+            // Group text items by their Y-coordinate to reconstruct lines
+            const lines: { [y: number]: { x: number, text: string }[] } = {};
+            textContent.items.forEach((item: any) => {
+                if (!('str' in item) || !item.str.trim()) {
+                    return;
+                }
+                // Round Y to group items on the same line
+                const y = Math.round(item.transform[5]);
+                if (!lines[y]) {
+                    lines[y] = [];
+                }
+                // Store text and its X position for later sorting
+                lines[y].push({ x: Math.round(item.transform[4]), text: item.str });
+            });
+            
+            // Sort lines by Y-coordinate (top to bottom), then sort text within each line by X-coordinate (left to right)
+            const pageLines = Object.keys(lines)
+                .map(y => parseInt(y, 10))
+                .sort((a, b) => b - a) // PDF Y-coordinates can be top-to-bottom or bottom-to-top, descending is safer
+                .map(y => lines[y]
+                    .sort((a, b) => a.x - b.x)
+                    .map(item => item.text)
+                    .join(' ')
+                );
+                
+            fullText += pageLines.join('\n') + '\n';
         }
 
         parseBankStatement(fullText);
@@ -257,7 +286,7 @@ export default function PdfConverter() {
             }
         } else {
             console.error(err);
-            setError("An error occurred while parsing the PDF.");
+            setError("An error occurred while parsing the PDF: " + err.message);
         }
     }
   }, [pdfjs, parseBankStatement]);
