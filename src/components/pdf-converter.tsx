@@ -48,8 +48,20 @@ interface Transaction {
 const parseCurrency = (value: string): number => {
   if (!value) return 0;
   // Standardize to use '.' as decimal separator and remove thousand separators
-  const cleaned = value.replace(/[\s,]/g, (match) => (match === ',' ? '.' : ''));
-  return parseFloat(cleaned) || 0;
+  const standard = value.replace(/\s/g, ''); // remove spaces
+  const lastDot = standard.lastIndexOf('.');
+  const lastComma = standard.lastIndexOf(',');
+
+  if (lastComma > lastDot) {
+    // Indonesian format: 1.234,56 -> 1234.56
+    return parseFloat(standard.replace(/\./g, '').replace(',', '.'));
+  } else if (lastDot > lastComma) {
+    // US format: 1,234.56 -> 1234.56
+    return parseFloat(standard.replace(/,/g, ''));
+  } else {
+    // No separators or only one kind (e.g. 1,234)
+    return parseFloat(standard.replace(/,/g, ''));
+  }
 };
 
 export default function PdfConverter() {
