@@ -152,7 +152,11 @@ export default function PdfConverter() {
     setData([]);
 
     try {
-        const typedArray = new Uint8Array(pdfData);
+        // Create a copy of the ArrayBuffer to pass to pdf.js.
+        // This prevents the original `pdfData` from being "detached" by the library,
+        // which would make it unusable if we need to ask for a password and retry.
+        const pdfDataCopy = pdfData.slice(0);
+        const typedArray = new Uint8Array(pdfDataCopy);
         const pdf = await pdfjs.getDocument({ data: typedArray, password: filePassword }).promise;
 
         let fullText = "";
@@ -170,6 +174,8 @@ export default function PdfConverter() {
     } catch (err: any) {
         setIsLoading(false);
         if (err.name === 'PasswordException') {
+            // The original `pdfData` is still valid here. We save a copy to the state
+            // so the user can enter a password and we can try parsing again.
             setPendingData(pdfData.slice(0));
             setIsPasswordDialogOpen(true);
             if (filePassword) {
