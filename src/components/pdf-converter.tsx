@@ -446,7 +446,11 @@ export default function PdfConverter() {
               />
             </div>
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setIsPasswordDialogOpen(false)}>Batal</Button>
+              <Button type="button" variant="secondary" onClick={() => {
+                setIsPasswordDialogOpen(false);
+                setError(null);
+                setIsLoading(false);
+              }}>Batal</Button>
               <Button type="submit">Buka</Button>
             </DialogFooter>
           </form>
