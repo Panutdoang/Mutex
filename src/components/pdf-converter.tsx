@@ -170,7 +170,7 @@ export default function PdfConverter() {
     } catch (err: any) {
         setIsLoading(false);
         if (err.name === 'PasswordException') {
-            setPendingData(pdfData);
+            setPendingData(pdfData.slice(0));
             setIsPasswordDialogOpen(true);
             if (filePassword) {
                 setError("Password salah. Silakan coba lagi.");
