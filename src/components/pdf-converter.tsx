@@ -35,7 +35,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 
 interface Transaction {
@@ -76,6 +75,7 @@ export default function PdfConverter() {
   const [password, setPassword] = useState("");
   const [pendingData, setPendingData] = useState<ArrayBuffer | null>(null);
   const [rawPdfText, setRawPdfText] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
 
   useEffect(() => {
     const loadPdfJs = async () => {
@@ -280,6 +280,7 @@ export default function PdfConverter() {
     setError(null);
     setData([]);
     setRawPdfText(null);
+    setFileName(file.name);
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -404,16 +405,16 @@ export default function PdfConverter() {
         )}
 
         {!isLoading && rawPdfText && (
-          <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="item-1">
-              <AccordionTrigger>Tampilkan Teks Mentah dari PDF</AccordionTrigger>
-              <AccordionContent>
-                <pre className="mt-2 w-full overflow-auto rounded-md bg-slate-800 p-4 text-sm text-white">
-                  <code>{rawPdfText}</code>
-                </pre>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+          <div className="w-full space-y-2 pt-4">
+            <h3 className="text-lg font-semibold text-foreground">
+              Teks Mentah dari: <span className="font-medium italic text-muted-foreground">{fileName}</span>
+            </h3>
+            <div className="w-full rounded-md border bg-background">
+              <pre className="p-4 text-sm text-foreground overflow-auto max-h-[400px]">
+                <code>{rawPdfText}</code>
+              </pre>
+            </div>
+          </div>
         )}
 
         {!isLoading && data.length === 0 && rawPdfText && (
