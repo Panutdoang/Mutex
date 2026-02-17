@@ -252,7 +252,8 @@ export default function PdfConverter() {
     } catch (err: any) {
         setIsLoading(false);
         if (err.name === 'PasswordException') {
-            setPendingData(pdfData.slice(0));
+            const pdfDataForPassword = pdfData.slice(0);
+            setPendingData(pdfDataForPassword);
             setIsPasswordDialogOpen(true);
             if (filePassword) {
                 setError("Password salah. Silakan coba lagi.");
@@ -290,7 +291,7 @@ export default function PdfConverter() {
             return;
         }
         const fileData = e.target.result as ArrayBuffer;
-        await parsePdf(fileData.slice(0));
+        await parsePdf(fileData);
     };
     reader.onerror = () => {
         setError("Error reading file.");
@@ -415,16 +416,6 @@ export default function PdfConverter() {
               </pre>
             </div>
           </div>
-        )}
-
-        {!isLoading && data.length === 0 && rawPdfText && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Gagal Mengekstrak Transaksi</AlertTitle>
-            <AlertDescription>
-              Aplikasi tidak dapat menemukan transaksi apa pun. Silakan periksa "Teks Mentah dari PDF" di atas untuk memverifikasi bahwa file Anda terbaca dengan benar. Formatnya mungkin tidak didukung.
-            </AlertDescription>
-          </Alert>
         )}
         
         {!isLoading && data.length > 0 && (
