@@ -75,7 +75,7 @@ export default function PdfConverter() {
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [pendingData, setPendingData] = useState<ArrayBuffer | null>(null);
-  const [debugData, setDebugData] = useState<string | null>(null);
+  const [rawPdfText, setRawPdfText] = useState<string | null>(null);
 
   useEffect(() => {
     const loadPdfJs = async () => {
@@ -96,7 +96,6 @@ export default function PdfConverter() {
   const parseBankStatement = useCallback((text: string) => {
     const lines = text.split("\n").filter(line => line.trim() !== '');
     const transactions: Transaction[] = [];
-    const debugInfo: any[] = [];
     let previousBalance: number | null = null;
     
     const dateRegex = /^\d{2}[\/.-]\d{2}(?:[\/.-]\d{2,4})?/;
@@ -108,45 +107,32 @@ export default function PdfConverter() {
             const numbers = line.match(numberRegex);
             if (numbers && numbers.length > 0) {
                 previousBalance = parseCurrency(numbers[numbers.length - 1]);
-                debugInfo.push({ step: "Find Initial Balance", line, foundBalance: previousBalance });
                 break;
             }
         }
-    }
-     if (previousBalance === null) {
-      debugInfo.push({ step: "Find Initial Balance", error: "Could not find initial balance." });
     }
 
     // Second pass: process transactions
     for (const line of lines) {
       if (dateRegex.test(line)) {
-        const lineDebug: any = { originalLine: line };
-
         const dateMatch = line.match(dateRegex);
         if (!dateMatch) continue;
 
         const date = dateMatch[0].replace(/-/g, '/');
-        lineDebug.parsedDate = date;
         
         const numbers = line.match(numberRegex);
-        lineDebug.foundNumbersRaw = numbers;
         
         if (numbers && numbers.length >= 1) { // Need at least a balance
           const parsedNumbers = numbers.map(parseCurrency);
-          lineDebug.foundNumbersParsed = parsedNumbers;
 
           const saldo = parsedNumbers[parsedNumbers.length - 1];
-          lineDebug.determinedSaldo = saldo;
           
           let debit = 0;
           let kredit = 0;
           let amountIsGuessed = false;
           
-          lineDebug.previousBalance = previousBalance;
-
           if (previousBalance !== null) {
             const diff = saldo - previousBalance;
-            lineDebug.balanceDiff = diff;
             const tolerance = 0.01;
             
             if (diff > tolerance) {
@@ -156,7 +142,6 @@ export default function PdfConverter() {
             }
           } else {
              amountIsGuessed = true;
-             lineDebug.warning = "No previous balance, guessing amount.";
              if (parsedNumbers.length >= 2) {
                 const amount = parsedNumbers[parsedNumbers.length - 2];
                 if (line.toUpperCase().includes('CR')) {
@@ -166,24 +151,18 @@ export default function PdfConverter() {
                 }
              }
           }
-          lineDebug.calculatedDebit = debit;
-          lineDebug.calculatedKredit = kredit;
 
           if (!amountIsGuessed && (debit > 0 || kredit > 0)) {
             const actualAmount = debit > 0 ? debit : kredit;
             const transactionCandidates = parsedNumbers.slice(0, parsedNumbers.length - 1);
-            lineDebug.amountCandidates = transactionCandidates;
             
             const closestMatch = transactionCandidates.find(p => Math.abs(p - actualAmount) < 0.01);
-            lineDebug.closestMatchToAmount = closestMatch;
             
             if (closestMatch !== undefined) {
                 if (debit > 0) debit = closestMatch;
                 if (kredit > 0) kredit = closestMatch;
             }
           }
-          lineDebug.refinedDebit = debit;
-          lineDebug.refinedKredit = kredit;
 
           let description = line;
           description = description.replace(dateRegex, '').trim();
@@ -191,7 +170,6 @@ export default function PdfConverter() {
             description = description.replace(numStr, '');
           });
           description = description.replace(/\s+(CR|DB)\s*$/i, '').trim().replace(/\s{2,}/g, ' ');
-          lineDebug.finalDescription = description;
 
           transactions.push({
             Tanggal: date,
@@ -203,16 +181,12 @@ export default function PdfConverter() {
 
           previousBalance = saldo;
         }
-        debugInfo.push(lineDebug);
       }
     }
     
-    setDebugData(JSON.stringify(debugInfo, null, 2));
-
-    if (transactions.length === 0) {
-        setError("No transactions could be automatically extracted. The PDF format might not be supported or it might be a scanned image.");
-    } else {
+    if (transactions.length > 0) {
         setData(transactions);
+        setError(null);
     }
     setIsLoading(false);
   }, []);
@@ -226,7 +200,7 @@ export default function PdfConverter() {
     setIsLoading(true);
     setError(null);
     setData([]);
-    setDebugData(null);
+    setRawPdfText(null);
 
     try {
         const pdfDataCopy = pdfData.slice(0);
@@ -269,6 +243,7 @@ export default function PdfConverter() {
             fullText += pageLines.join('\n') + '\n';
         }
 
+        setRawPdfText(fullText);
         parseBankStatement(fullText);
         setIsPasswordDialogOpen(false);
         setPendingData(null);
@@ -304,7 +279,7 @@ export default function PdfConverter() {
     setIsLoading(true);
     setError(null);
     setData([]);
-    setDebugData(null);
+    setRawPdfText(null);
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -428,19 +403,34 @@ export default function PdfConverter() {
           </div>
         )}
 
-        {error && !isPasswordDialogOpen && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+        {!isLoading && rawPdfText && (
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="item-1">
+              <AccordionTrigger>Tampilkan Teks Mentah dari PDF</AccordionTrigger>
+              <AccordionContent>
+                <pre className="mt-2 w-full overflow-auto rounded-md bg-slate-800 p-4 text-sm text-white">
+                  <code>{rawPdfText}</code>
+                </pre>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         )}
 
-        {data.length > 0 && !isLoading && (
+        {!isLoading && data.length === 0 && rawPdfText && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Gagal Mengekstrak Transaksi</AlertTitle>
+            <AlertDescription>
+              Aplikasi tidak dapat menemukan transaksi apa pun. Silakan periksa "Teks Mentah dari PDF" di atas untuk memverifikasi bahwa file Anda terbaca dengan benar. Formatnya mungkin tidak didukung.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {!isLoading && data.length > 0 && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
                 <h3 className="text-2xl font-semibold text-primary">
-                Preview Data ({data.length} transaksi ditemukan)
+                Hasil Analisa ({data.length} transaksi ditemukan)
                 </h3>
                 <Button onClick={handleDownload}>
                     <Download className="mr-2 h-4 w-4" />
@@ -479,20 +469,6 @@ export default function PdfConverter() {
             </div>
           </div>
         )}
-        
-        {debugData && !isLoading && (
-          <Accordion type="single" collapsible className="w-full pt-4">
-            <AccordionItem value="item-1">
-              <AccordionTrigger>Tampilkan Analisa JSON Sementara</AccordionTrigger>
-              <AccordionContent>
-                <pre className="mt-2 w-full overflow-auto rounded-md bg-slate-800 p-4 text-sm text-white">
-                  <code>{debugData}</code>
-                </pre>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        )}
-
       </CardContent>
 
       <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
