@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, DragEvent, useRef, useEffect } from "react";
-import * as pdfjs from "pdfjs-dist";
 import * as XLSX from "xlsx";
 import {
   UploadCloud,
@@ -30,13 +29,6 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
-// Set the workerSrc for pdfjs-dist
-// This is necessary for the library to work in a web environment.
-// We use a CDN to avoid complex build configurations with Next.js.
-if (typeof window !== "undefined") {
-  pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-}
-
 interface Transaction {
   Tanggal: string;
   Deskripsi: string;
@@ -45,64 +37,38 @@ interface Transaction {
   Saldo: number;
 }
 
+const parseCurrency = (value: string): number => {
+  if (!value) return 0;
+  // Standardize to use '.' as decimal separator and remove thousand separators
+  const cleaned = value.replace(/[\s,]/g, (match) => (match === ',' ? '.' : ''));
+  return parseFloat(cleaned) || 0;
+};
+
 export default function PdfConverter() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<Transaction[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pdfjs, setPdfjs] = useState<typeof import("pdfjs-dist/build/pdf.mjs") | null>(null);
 
-  const parseCurrency = (value: string): number => {
-    if (!value) return 0;
-    // Standardize to use '.' as decimal separator and remove thousand separators
-    const cleaned = value.replace(/[\s,]/g, (match) => (match === ',' ? '.' : ''));
-    return parseFloat(cleaned) || 0;
-  };
-
-  const processFile = useCallback(async (file: File) => {
-    if (file.type !== "application/pdf") {
-      setError("Please upload a valid PDF file.");
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    setData([]);
-
-    try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        if (!e.target?.result) {
-            setError("Could not read the file.");
-            setIsLoading(false);
-            return;
+  useEffect(() => {
+    const loadPdfJs = async () => {
+        try {
+            const pdfjsModule = await import("pdfjs-dist/build/pdf.mjs");
+            pdfjsModule.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsModule.version}/build/pdf.worker.min.mjs`;
+            setPdfjs(pdfjsModule);
+        } catch (e) {
+            console.error("Failed to load pdfjs-dist", e);
+            setError("Failed to load PDF library.");
         }
-
-        const typedArray = new Uint8Array(e.target.result as ArrayBuffer);
-        const pdf = await pdfjs.getDocument({ data: typedArray }).promise;
-        let fullText = "";
-
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
-          fullText += textContent.items.map((item) => ('str' in item ? item.str : '')).join(" ") + "\n";
-        }
-
-        parseBankStatement(fullText);
-      };
-      reader.onerror = () => {
-        setError("Error reading file.");
-        setIsLoading(false);
-      }
-      reader.readAsArrayBuffer(file);
-    } catch (err) {
-      console.error(err);
-      setError("An error occurred while parsing the PDF.");
-      setIsLoading(false);
+    };
+    if (typeof window !== "undefined") {
+        loadPdfJs();
     }
   }, []);
 
-  const parseBankStatement = (text: string) => {
+  const parseBankStatement = useCallback((text: string) => {
     const lines = text.split("\n");
     const transactions: Transaction[] = [];
     
@@ -177,8 +143,54 @@ export default function PdfConverter() {
     }
     setData(transactions);
     setIsLoading(false);
-  };
+  }, []);
 
+  const processFile = useCallback(async (file: File) => {
+    if (!pdfjs) {
+      setError("PDF library is still loading. Please try again in a moment.");
+      return;
+    }
+    if (file.type !== "application/pdf") {
+      setError("Please upload a valid PDF file.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setData([]);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        if (!e.target?.result) {
+            setError("Could not read the file.");
+            setIsLoading(false);
+            return;
+        }
+
+        const typedArray = new Uint8Array(e.target.result as ArrayBuffer);
+        const pdf = await pdfjs.getDocument({ data: typedArray }).promise;
+        let fullText = "";
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          fullText += textContent.items.map((item) => ('str' in item ? item.str : '')).join(" ") + "\n";
+        }
+
+        parseBankStatement(fullText);
+      };
+      reader.onerror = () => {
+        setError("Error reading file.");
+        setIsLoading(false);
+      }
+      reader.readAsArrayBuffer(file);
+    } catch (err) {
+      console.error(err);
+      setError("An error occurred while parsing the PDF.");
+      setIsLoading(false);
+    }
+  }, [pdfjs, parseBankStatement]);
 
   const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -260,6 +272,7 @@ export default function PdfConverter() {
             accept="application/pdf"
             className="hidden"
             onChange={handleFileSelect}
+            disabled={!pdfjs || isLoading}
           />
           <UploadCloud className="w-16 h-16 text-primary/80 mb-4" />
           <p className="text-lg font-semibold text-foreground">
