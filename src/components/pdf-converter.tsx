@@ -96,6 +96,7 @@ export default function PdfConverter() {
 
   useEffect(() => {
     const mainContainer = document.querySelector('#main-container');
+    const tableContainer = document.querySelector('#table-container');
     const shouldLockScroll = data.length === 0;
 
     if (shouldLockScroll && !isMobile) {
@@ -110,6 +111,14 @@ export default function PdfConverter() {
         mainContainer.classList.remove('justify-center');
         mainContainer.classList.add('justify-start');
       }
+    }
+    
+    if (tableContainer) {
+        if (isMobile) {
+            tableContainer.classList.add('overflow-auto');
+        } else {
+            tableContainer.classList.remove('overflow-auto');
+        }
     }
 
     return () => {
@@ -530,7 +539,7 @@ export default function PdfConverter() {
           Mutex
         </CardTitle>
         <CardDescription className="text-lg">
-          PDF Bank Mutation to Excel Converter
+          Bank apps only give you PDFs? Mutex turns your Monthly Bank Statements into clean, ready-to-use Excel sheets in seconds
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 p-6">
@@ -637,7 +646,7 @@ export default function PdfConverter() {
               </AccordionTrigger>
               <AccordionContent>
                 {data.length > 0 ? (
-                    <div className="rounded-lg shadow-neumorphic-inset p-2 max-h-[500px] overflow-scroll">
+                    <div id="table-container" className="rounded-lg shadow-neumorphic-inset max-h-[500px]">
                       <Table>
                         <TableHeader className="sticky top-0 z-10 bg-card/90 backdrop-blur-sm">
                           <TableRow className="border-b-0">
