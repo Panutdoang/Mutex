@@ -36,13 +36,14 @@ import {
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle,
   DialogFooter,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 
 interface Transaction {
@@ -83,6 +84,7 @@ export default function PdfConverter() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const isSuccess = useRef(false);
+  const isMobile = useIsMobile();
 
   const handleThemeChange = (theme: 'light' | 'dark') => {
     if (theme === 'dark') {
@@ -94,18 +96,19 @@ export default function PdfConverter() {
 
   useEffect(() => {
     const mainContainer = document.querySelector('#main-container');
+    const shouldLockScroll = data.length === 0 && !isMobile;
 
-    if (data.length > 0) {
-      document.body.style.overflow = 'auto';
-      if (mainContainer) {
-        mainContainer.classList.remove('justify-center');
-        mainContainer.classList.add('justify-start');
-      }
-    } else {
+    if (shouldLockScroll) {
       document.body.style.overflow = 'hidden';
       if (mainContainer) {
         mainContainer.classList.remove('justify-start');
         mainContainer.classList.add('justify-center');
+      }
+    } else {
+      document.body.style.overflow = 'auto';
+      if (mainContainer) {
+        mainContainer.classList.remove('justify-center');
+        mainContainer.classList.add('justify-start');
       }
     }
 
@@ -116,7 +119,7 @@ export default function PdfConverter() {
         mainContainer.classList.add('justify-start');
       }
     };
-  }, [data]);
+  }, [data.length, isMobile]);
 
 
   useEffect(() => {
@@ -265,7 +268,8 @@ export default function PdfConverter() {
                     const date = dateMatch[1];
                     const lineContent = trimmed;
 
-                    const amountRegex = /([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/;
+                    // Regex to robustly find debit, credit, and balance at the end of the line
+                    const amountRegex = /(\d[\d.,]*)\s+(\d[\d.,]*)\s+(\d[\d.,]*)$/;
                     const amountMatch = lineContent.match(amountRegex);
 
                     if (amountMatch) {
@@ -577,7 +581,7 @@ export default function PdfConverter() {
                 <p className="text-lg font-semibold text-foreground">
                     File Berhasil Diproses!
                 </p>
-                 <p className="text-sm text-muted-foreground mb-4">
+                 <p className="text-sm text-muted-foreground mb-4 px-4 break-words text-center max-w-full">
                     {fileName}
                 </p>
                 <Button variant="outline" size="sm" onClick={handleClearFile}>
@@ -633,8 +637,8 @@ export default function PdfConverter() {
                         Download Excel
                       </Button>
                     </div>
-                    <div className="rounded-lg shadow-neumorphic-inset p-2 max-h-[500px] overflow-y-auto">
-                      <Table className="table-fixed">
+                    <div className="rounded-lg shadow-neumorphic-inset p-2 max-h-[500px] overflow-x-auto overflow-y-auto">
+                      <Table>
                         <TableHeader className="sticky top-0 bg-card z-10">
                           <TableRow>
                             <TableHead className="text-xs">Tanggal</TableHead>
@@ -648,7 +652,7 @@ export default function PdfConverter() {
                           {data.map((row, index) => (
                             <TableRow key={index}>
                               <TableCell className="font-medium text-xs select-none">{row.Tanggal}</TableCell>
-                              <TableCell className="text-xs break-words select-none">{row.Transaksi}</TableCell>
+                              <TableCell className="text-xs select-none whitespace-nowrap">{row.Transaksi}</TableCell>
                               <TableCell className="text-right font-mono text-xs select-none">
                                 {row.Pemasukan > 0 ? row.Pemasukan.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
@@ -749,9 +753,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
-
-    
 
     
