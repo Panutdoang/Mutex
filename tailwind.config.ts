@@ -9,6 +9,10 @@ export default {
   ],
   theme: {
     extend: {
+      boxShadow: {
+        'neumorphic': '7px 7px 14px hsl(var(--border)), -7px -7px 14px hsl(var(--light-shadow))',
+        'neumorphic-inset': 'inset 7px 7px 14px hsl(var(--border)), inset -7px -7px 14px hsl(var(--light-shadow))',
+      },
       fontFamily: {
         body: ['Inter', 'sans-serif'],
         headline: ['Inter', 'sans-serif'],

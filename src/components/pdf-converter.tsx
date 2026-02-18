@@ -11,6 +11,7 @@ import {
   EyeOff,
   X as XIcon,
   FileCheck2,
+  FileSpreadsheet,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -464,7 +465,7 @@ export default function PdfConverter() {
   };
 
   return (
-    <Card className="w-full shadow-xl">
+    <Card className="w-full">
       <CardHeader className="text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-primary mb-2">
           <svg
@@ -488,11 +489,9 @@ export default function PdfConverter() {
       <CardContent className="space-y-6 p-6">
         <div
           className={cn(
-            "relative flex flex-col items-center justify-center w-full min-h-[200px] p-12 border-2 border-dashed rounded-lg transition-colors duration-200",
-            isDragging
-              ? "border-primary bg-primary/10"
-              : "border-border",
-            !selectedFile && !isLoading && "hover:border-primary/50 hover:bg-accent/50 cursor-pointer"
+            "relative flex flex-col items-center justify-center w-full min-h-[200px] p-12 rounded-lg transition-all duration-200 shadow-neumorphic-inset",
+            isDragging ? "bg-primary/10" : "",
+            !selectedFile && !isLoading && "cursor-pointer"
           )}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
@@ -563,13 +562,13 @@ export default function PdfConverter() {
               </AccordionTrigger>
               <AccordionContent>
                 {rawPdfText ? (
-                  <div className="w-full rounded-md border bg-background">
+                  <div className="w-full rounded-md bg-background shadow-neumorphic-inset">
                     <pre className="p-4 text-sm text-foreground overflow-auto max-h-[400px] whitespace-pre-wrap">
                       <code>{rawPdfText}</code>
                     </pre>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center rounded-md border border-dashed p-8 text-muted-foreground">
+                  <div className="flex items-center justify-center rounded-md shadow-neumorphic-inset p-8 text-muted-foreground">
                     <p>Unggah dan proses file PDF untuk melihat teks mentah di sini.</p>
                   </div>
                 )}
@@ -591,7 +590,7 @@ export default function PdfConverter() {
                         Download Excel
                       </Button>
                     </div>
-                    <div className="border rounded-lg max-h-[500px] overflow-y-auto">
+                    <div className="rounded-lg shadow-neumorphic-inset p-2 max-h-[500px] overflow-y-auto">
                       <Table className="table-fixed">
                         <TableHeader className="sticky top-0 bg-card z-10">
                           <TableRow>
@@ -635,9 +634,9 @@ export default function PdfConverter() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center rounded-md border border-dashed p-8 text-muted-foreground">
+                  <div className="flex items-center justify-center rounded-md shadow-neumorphic-inset p-8 text-muted-foreground">
                     {selectedFile && !isLoading ? (
-                        <Alert variant="default" className="w-full text-left">
+                        <Alert variant="default" className="w-full text-left bg-transparent shadow-none">
                             <AlertTitle>Tidak ada transaksi yang ditemukan</AlertTitle>
                             <AlertDescription>
                                 Aplikasi tidak dapat menemukan transaksi dari teks mentah. Formatnya mungkin tidak didukung.
