@@ -105,7 +105,7 @@ export default function PdfConverter() {
 
     // BNI Parser
     const bniDateRegex = /^(\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4})/;
-    const bniAmountRegex = /([+-][\d.,]+)\s+([\d.,]+)$/;
+    const bniAmountRegex = /([+-][\d.,]+)\s+([\d.,]+)/;
 
     // BRI Parser
     const briDateRegex = /^(\d{2}\/\d{2}\/\d{2})/;
@@ -123,7 +123,8 @@ export default function PdfConverter() {
         const bniIgnoreMarkers = [
             'PT Bank Negara Indonesia', 'Laporan Mutasi Rekening', 'Periode:',
             'Tanggal & Waktu', 'berizin dan diawasi oleh Otoritas Jasa Keuangan',
-            'peserta penjaminan Lembaga Penjamin Simpanan'
+            'peserta penjaminan Lembaga Penjamin Simpanan',
+            'Rincian Transaksi Nominal (IDR) Saldo (IDR)'
         ];
         const bniEndMarkers = ['Saldo Akhir', 'Informasi Lainnya'];
 
@@ -139,24 +140,27 @@ export default function PdfConverter() {
                 currentBlock = [];
                 break; 
             }
-
-            if (bniIgnoreMarkers.some(marker => trimmed.includes(marker)) || /^\d+ dari \d+$/.test(trimmed)) {
-                continue;
-            }
             
             if (trimmed.startsWith('Saldo Awal')) {
                 inTransactionSection = true;
                 continue; // Skip saldo awal line, begin processing from next line
             }
+            
+            if (!inTransactionSection) continue;
 
+            if (bniIgnoreMarkers.some(marker => trimmed.includes(marker)) || /^\d+ dari \d+$/.test(trimmed)) {
+                continue;
+            }
+            
             if (bniDateRegex.test(trimmed)) {
-                inTransactionSection = true;
                 if (currentBlock.length > 0) {
                     blocks.push(currentBlock);
                 }
                 currentBlock = [trimmed];
-            } else if (inTransactionSection) {
-                currentBlock.push(trimmed);
+            } else {
+                if(currentBlock.length > 0) {
+                    currentBlock.push(trimmed);
+                }
             }
         }
         if (currentBlock.length > 0) {
@@ -165,29 +169,27 @@ export default function PdfConverter() {
         
         for (const blockLines of blocks) {
             try {
-                const firstLine = blockLines[0] || '';
-                const dateMatch = firstLine.match(bniDateRegex);
+                const combinedLines = blockLines.join(' ');
+                
+                const dateMatch = combinedLines.match(bniDateRegex);
                 if (!dateMatch) continue;
                 const date = dateMatch[1];
                 
-                let nominalString = '';
-                let saldoString = '';
-                
-                const combinedLines = blockLines.join(' ');
                 const amountMatch = combinedLines.match(bniAmountRegex);
+                if (!amountMatch) {
+                    continue;
+                }
 
-                if (!amountMatch) continue;
-
-                nominalString = amountMatch[1];
-                saldoString = amountMatch[2];
+                const nominalString = amountMatch[1];
+                const saldoString = amountMatch[2];
 
                 const pengeluaran = nominalString.startsWith('-') ? parseCurrency(nominalString.substring(1)) : 0;
                 const pemasukan = nominalString.startsWith('+') ? parseCurrency(nominalString.substring(1)) : 0;
                 const saldo = parseCurrency(saldoString);
                 
                 let description = combinedLines
+                    .replace(amountMatch[0], '')
                     .replace(bniDateRegex, '')
-                    .replace(bniAmountRegex, '')
                     .replace(/\d{2}:\d{2}:\d{2} WIB/, '')
                     .trim()
                     .replace(/\s{2,}/g, ' ');
