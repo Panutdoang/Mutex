@@ -33,9 +33,9 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -629,19 +629,19 @@ export default function PdfConverter() {
                         <TableBody>
                           {data.map((row, index) => (
                             <TableRow key={index}>
-                              <TableCell className="font-medium text-xs">{row.Tanggal}</TableCell>
-                              <TableCell className="text-xs break-words">{row.Transaksi}</TableCell>
-                              <TableCell className="text-right font-mono text-xs">
+                              <TableCell className="font-medium text-xs select-none">{row.Tanggal}</TableCell>
+                              <TableCell className="text-xs break-words select-none">{row.Transaksi}</TableCell>
+                              <TableCell className="text-right font-mono text-xs select-none">
                                 {row.Pemasukan > 0 ? row.Pemasukan.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
                                 }) : "0.00"}
                               </TableCell>
-                              <TableCell className="text-right font-mono text-xs">
+                              <TableCell className="text-right font-mono text-xs select-none">
                                 {row.Pengeluaran > 0 ? row.Pengeluaran.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
                                 }) : "0.00"}
                               </TableCell>
-                              <TableCell className="text-right font-mono text-xs">
+                              <TableCell className="text-right font-mono text-xs select-none">
                                 {row.Saldo.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
                                 })}
@@ -731,3 +731,7 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
+
+    
