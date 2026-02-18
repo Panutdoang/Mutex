@@ -151,7 +151,7 @@ export default function PdfConverter() {
 
     // BNI Parser
     const bniDateRegex = /^(\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4})/;
-    const bniAmountRegex = /^([+-][\d.,]+)\s+([\d.,]+)$/;
+    const bniAmountRegex = /([+-][\d.,]+)\s+([\d.,]+)$/;
 
     // BRI Parser
     const briDateRegex = /^(\d{2}\/\d{2}\/\d{2})/;
@@ -218,41 +218,22 @@ export default function PdfConverter() {
                 
                 let nominalString = '';
                 let saldoString = '';
-                let amountLineIndex = -1;
+                
+                const combinedLines = blockLines.join(' ');
+                const amountMatch = combinedLines.match(bniAmountRegex);
 
-                for (let i = 0; i < blockLines.length; i++) {
-                    const line = blockLines[i];
-                    const amountMatch = line.match(bniAmountRegex);
-                    if (amountMatch) {
-                        nominalString = amountMatch[1];
-                        saldoString = amountMatch[2];
-                        amountLineIndex = i;
-                        break;
-                    }
-                }
+                if (!amountMatch) continue;
 
-                if (amountLineIndex === -1) continue;
+                nominalString = amountMatch[1];
+                saldoString = amountMatch[2];
 
                 const pengeluaran = nominalString.startsWith('-') ? parseCurrency(nominalString.substring(1)) : 0;
                 const pemasukan = nominalString.startsWith('+') ? parseCurrency(nominalString.substring(1)) : 0;
                 const saldo = parseCurrency(saldoString);
                 
-                const descriptionParts: string[] = [];
-
-                // Add part of first line if it contains description
-                descriptionParts.push(firstLine.replace(bniDateRegex, '').trim());
-
-                // Add all lines that are not the amount line
-                for (let i = 0; i < blockLines.length; i++) {
-                    if (i !== amountLineIndex) {
-                        // For the first line, we've already processed it
-                        if (i > 0) {
-                            descriptionParts.push(blockLines[i]);
-                        }
-                    }
-                }
-                
-                let description = descriptionParts.filter(p => p).join(' ')
+                let description = combinedLines
+                    .replace(bniDateRegex, '')
+                    .replace(bniAmountRegex, '')
                     .replace(/\d{2}:\d{2}:\d{2} WIB/, '')
                     .trim()
                     .replace(/\s{2,}/g, ' ');
@@ -382,7 +363,7 @@ export default function PdfConverter() {
 
     } catch (err: any) {
         if (err.name === 'PasswordException') {
-            setPendingData(pdfData);
+            setPendingData(pdfData.slice(0)); // Create a copy of the buffer
             setIsPasswordDialogOpen(true);
             if (filePassword) {
                 setError("Password salah. Silakan coba lagi.");
