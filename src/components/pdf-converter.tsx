@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, DragEvent, useRef, useEffect, FormEvent } from "react";
@@ -47,38 +48,18 @@ interface Transaction {
 
 const parseCurrency = (value: string): number => {
     if (!value) return 0;
-    const standard = value.replace(/\s/g, '');
-    const hasComma = standard.includes(',');
-    const hasDot = standard.includes('.');
-
-    // If no separators, or only one type that isn't a decimal separator for sure
-    if (!hasComma && !hasDot) return parseFloat(standard);
-    
-    // Only commas, treat as thousand separators (e.g., 1,234,567)
-    if (hasComma && !hasDot) return parseFloat(standard.replace(/,/g, ''));
-    
-    // Only dots, could be ambiguous (1.234 vs 1.23)
-    if (hasDot && !hasComma) {
-        // If more than 2 digits after the last dot, it's likely a thousands separator (e.g. 1.234.567)
-        if (standard.substring(standard.lastIndexOf('.') + 1).length > 2) {
-            return parseFloat(standard.replace(/\./g, ''));
+    // Handle Indonesian format: 1.234.567,89 -> remove dots, replace comma with dot
+    if (value.includes(',') && value.includes('.')) {
+        const lastDot = value.lastIndexOf('.');
+        const lastComma = value.lastIndexOf(',');
+        if (lastComma > lastDot) {
+            return parseFloat(value.replace(/\./g, '').replace(',', '.'));
         }
-        // Otherwise, it's likely a decimal separator (e.g. 123.45)
-        return parseFloat(standard);
     }
-
-    // Both comma and dot exist, determine format by last separator
-    const lastDot = standard.lastIndexOf('.');
-    const lastComma = standard.lastIndexOf(',');
-
-    if (lastComma > lastDot) {
-      // Indonesian format: 1.234,56
-      return parseFloat(standard.replace(/\./g, '').replace(',', '.'));
-    } else {
-      // US format: 1,234.56
-      return parseFloat(standard.replace(/,/g, ''));
-    }
+    // Handle US format: 1,234,567.89 -> remove commas
+    return parseFloat(value.replace(/,/g, ''));
 };
+
 
 export default function PdfConverter() {
   const [isDragging, setIsDragging] = useState(false);
@@ -116,46 +97,49 @@ export default function PdfConverter() {
 
     const dateRegex = /^(\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4})/;
     
-    // Find transaction blocks first
     const blocks: string[] = [];
     let currentBlock: string[] = [];
     let inTransactionSection = false;
 
-    // Markers for lines to ignore completely (headers/footers)
     const ignoreMarkers = [
         'PT Bank Negara Indonesia',
         'Laporan Mutasi Rekening',
         'Periode:',
         'Tanggal & Waktu',
-        'Saldo Akhir',
         'Informasi Lainnya',
         'berizin dan diawasi oleh Otoritas Jasa Keuangan',
         'peserta penjaminan Lembaga Penjamin Simpanan'
     ];
+    
+    const endMarkers = ['Saldo Akhir', 'Informasi Lainnya'];
 
     for (const line of allLines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
+        
+        if (endMarkers.some(marker => trimmed.startsWith(marker))) {
+            inTransactionSection = false;
+            if (currentBlock.length > 0) {
+                blocks.push(currentBlock.join(' '));
+            }
+            currentBlock = [];
+            break; 
+        }
 
-        // Ignore headers/footers anywhere in the document
         if (ignoreMarkers.some(marker => trimmed.includes(marker)) || /^\d+ dari \d+$/.test(trimmed)) {
             continue;
         }
 
-        // The first date marks the beginning of the transaction list
         if (dateRegex.test(trimmed)) {
             inTransactionSection = true;
-            // If we have a block, push it and start a new one
             if (currentBlock.length > 0) {
                 blocks.push(currentBlock.join(' '));
             }
             currentBlock = [trimmed];
         } else if (inTransactionSection) {
-            // If we are in the transaction section, append the line to the current block
             currentBlock.push(trimmed);
         }
     }
-    // Add the last block if it exists
     if (currentBlock.length > 0) {
         blocks.push(currentBlock.join(' '));
     }
@@ -167,8 +151,7 @@ export default function PdfConverter() {
 
             const date = dateMatch[1];
             
-            // For BNI, the amounts are together, like `+28,620,000 48,068,577` or `-2,500 33,866,077`
-            const amountMatch = block.match(/([+-][\d,.]+) ([\d,.]+)/);
+            const amountMatch = block.match(/([+-][\d,.]+)\s+([\d,.]+)/);
             if (!amountMatch) continue;
 
             const nominalString = amountMatch[1];
@@ -226,25 +209,21 @@ export default function PdfConverter() {
                 continue;
             }
 
-            // Group text items by their Y-coordinate to reconstruct lines
             const lines: { [y: number]: { x: number, text: string }[] } = {};
             textContent.items.forEach((item: any) => {
                 if (!('str' in item) || !item.str.trim()) {
                     return;
                 }
-                // Round Y to group items on the same line
                 const y = Math.round(item.transform[5]);
                 if (!lines[y]) {
                     lines[y] = [];
                 }
-                // Store text and its X position for later sorting
                 lines[y].push({ x: Math.round(item.transform[4]), text: item.str });
             });
             
-            // Sort lines by Y-coordinate (top to bottom), then sort text within each line by X-coordinate (left to right)
             const pageLines = Object.keys(lines)
                 .map(y => parseInt(y, 10))
-                .sort((a, b) => b - a) // PDF Y-coordinates can be top-to-bottom or bottom-to-top, descending is safer
+                .sort((a, b) => b - a)
                 .map(y => lines[y]
                     .sort((a, b) => a.x - b.x)
                     .map(item => item.text)
@@ -387,7 +366,7 @@ export default function PdfConverter() {
             <span>Mutex</span>
         </CardTitle>
         <CardDescription className="text-lg">
-          PDF to Excel Converter
+          PDF Bank Mutation to Excel Converter
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 p-6">
@@ -540,3 +519,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
