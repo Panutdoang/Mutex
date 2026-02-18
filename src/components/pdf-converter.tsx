@@ -96,9 +96,9 @@ export default function PdfConverter() {
 
   useEffect(() => {
     const mainContainer = document.querySelector('#main-container');
-    const shouldLockScroll = data.length === 0 && !isMobile;
+    const shouldLockScroll = data.length === 0;
 
-    if (shouldLockScroll) {
+    if (shouldLockScroll && !isMobile) {
       document.body.style.overflow = 'hidden';
       if (mainContainer) {
         mainContainer.classList.remove('justify-start');
@@ -637,9 +637,9 @@ export default function PdfConverter() {
               </AccordionTrigger>
               <AccordionContent>
                 {data.length > 0 ? (
-                    <div className="rounded-lg shadow-neumorphic-inset overflow-auto max-h-[500px]">
+                    <div className="rounded-lg shadow-neumorphic-inset p-2 max-h-[500px] overflow-scroll">
                       <Table>
-                        <TableHeader className="sticky top-0 z-10 backdrop-blur-sm bg-card/80">
+                        <TableHeader className="sticky top-0 z-10 bg-card/90 backdrop-blur-sm">
                           <TableRow className="border-b-0">
                             <TableHead className="text-xs rounded-tl-lg whitespace-nowrap">Tanggal</TableHead>
                             <TableHead className="text-xs">Transaksi</TableHead>
