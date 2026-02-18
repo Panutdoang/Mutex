@@ -168,7 +168,10 @@ export default function PdfConverter() {
         const noise = [
             'peserta penjaminan Lembaga Penjamin Simpanan',
             'Tanggal & Waktu Rincian Transaksi Nominal (IDR) Saldo (IDR)',
-            'lanjutan dari halaman sebelumnya'
+            'lanjutan dari halaman sebelumnya',
+            'Laporan Mutasi Rekening',
+            'Periode:',
+            'PT Bank Negara Indonesia (Persero) Tbk',
         ];
 
         for (const line of allLines) {
@@ -190,7 +193,8 @@ export default function PdfConverter() {
             if (!inTransactionSection || !trimmed) continue;
             
             // Explicitly ignore known noise/header/footer lines within the transaction section
-            if (noise.some(n => trimmed.includes(n)) || /halaman \d+ dari \d+/.test(trimmed.toLowerCase())) {
+            const pageNumRegex = /^\d+ dari \d+$/;
+            if (noise.some(n => trimmed.includes(n)) || /halaman \d+ dari \d+/.test(trimmed.toLowerCase()) || pageNumRegex.test(trimmed)) {
                 continue;
             }
             
@@ -919,3 +923,6 @@ export default function PdfConverter() {
   );
 }
 
+
+    
+    
