@@ -128,7 +128,9 @@ export default function PdfConverter() {
         'Periode:',
         'Tanggal & Waktu',
         'Saldo Akhir',
-        'Informasi Lainnya'
+        'Informasi Lainnya',
+        'berizin dan diawasi oleh Otoritas Jasa Keuangan',
+        'peserta penjaminan Lembaga Penjamin Simpanan'
     ];
 
     for (const line of allLines) {
@@ -136,7 +138,7 @@ export default function PdfConverter() {
         if (!trimmed) continue;
 
         // Ignore headers/footers anywhere in the document
-        if (ignoreMarkers.some(marker => trimmed.startsWith(marker)) || /^\d+ dari \d+$/.test(trimmed)) {
+        if (ignoreMarkers.some(marker => trimmed.includes(marker)) || /^\d+ dari \d+$/.test(trimmed)) {
             continue;
         }
 
@@ -362,17 +364,30 @@ export default function PdfConverter() {
     }));
     worksheet["!cols"] = colWidths;
 
-    XLSX.writeFile(workbook, "Laporan_Keuangan_Kandang_Ayam.xlsx");
+    XLSX.writeFile(workbook, "Mutex_Report.xlsx");
   };
 
   return (
     <Card className="w-full shadow-xl">
       <CardHeader className="text-center">
-        <CardTitle className="text-3xl font-bold text-primary">
-          FarmFin PDF to Excel
+        <CardTitle className="text-3xl font-bold text-primary flex items-center justify-center gap-2">
+            <svg
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="text-primary"
+            >
+                <path
+                d="M4 20V4H8L12 12L16 4H20V20H16V9L12 17L8 9V20H4Z"
+                fill="currentColor"
+                />
+            </svg>
+            <span>Mutex</span>
         </CardTitle>
         <CardDescription className="text-lg">
-          Sistem Laporan Keuangan Kandang Ayam
+          PDF to Excel Converter
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 p-6">
