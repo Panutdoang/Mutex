@@ -46,9 +46,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Transaction {
   Tanggal: string;
-  Deskripsi: string;
-  Debit: number;
-  Kredit: number;
+  Transaksi: string;
+  Pemasukan: number;
+  Pengeluaran: number;
   Saldo: number;
 }
 
@@ -170,8 +170,8 @@ export default function PdfConverter() {
                 const nominalString = amountMatch[1];
                 const saldoString = amountMatch[2];
 
-                const debit = nominalString.startsWith('-') ? parseCurrency(nominalString.substring(1)) : 0;
-                const kredit = nominalString.startsWith('+') ? parseCurrency(nominalString.substring(1)) : 0;
+                const pengeluaran = nominalString.startsWith('-') ? parseCurrency(nominalString.substring(1)) : 0;
+                const pemasukan = nominalString.startsWith('+') ? parseCurrency(nominalString.substring(1)) : 0;
                 const saldo = parseCurrency(saldoString);
 
                 let description = block;
@@ -182,9 +182,9 @@ export default function PdfConverter() {
 
                 transactions.push({
                     Tanggal: date,
-                    Deskripsi: description,
-                    Debit: debit,
-                    Kredit: kredit,
+                    Transaksi: description,
+                    Pemasukan: pemasukan,
+                    Pengeluaran: pengeluaran,
                     Saldo: saldo,
                 });
 
@@ -228,9 +228,9 @@ export default function PdfConverter() {
 
                     transactions.push({
                         Tanggal: dateMatch[1],
-                        Deskripsi: description,
-                        Debit: parseCurrency(debitStr),
-                        Kredit: parseCurrency(creditStr),
+                        Transaksi: description,
+                        Pemasukan: parseCurrency(creditStr),
+                        Pengeluaran: parseCurrency(debitStr),
                         Saldo: parseCurrency(balanceStr),
                     });
 
@@ -404,15 +404,28 @@ export default function PdfConverter() {
   };
 
   const handleDownload = () => {
-    const worksheet = XLSX.utils.json_to_sheet(data);
+    const dataForSheet = data.map(row => ({
+      'Tanggal': row.Tanggal,
+      'Transaksi': row.Transaksi,
+      'Pemasukan': row.Pemasukan,
+      'Pengeluaran': row.Pengeluaran,
+      'Saldo': row.Saldo
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(dataForSheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Mutasi");
     
-    if (data.length > 0) {
-        const cols = Object.keys(data[0]);
-        const colWidths = cols.map(col => ({
-          wch: Math.max(...data.map(row => row[col as keyof Transaction]?.toString().length ?? 0), col.length)
-        }));
+    if (dataForSheet.length > 0) {
+        const cols = Object.keys(dataForSheet[0]);
+        const colWidths = cols.map(col => {
+            const key = col as keyof (typeof dataForSheet)[0];
+            return {
+              wch: Math.max(
+                ...dataForSheet.map(row => row[key]?.toString().length ?? 0), 
+                key.length
+              )
+            }
+        });
         worksheet["!cols"] = colWidths;
     }
 
@@ -501,7 +514,7 @@ export default function PdfConverter() {
         )}
 
         <div className={cn("space-y-6", isLoading ? "hidden" : "block")}>
-          <Accordion type="single" collapsible className="w-full">
+          <Accordion type="single" collapsible className="w-full" defaultValue="item-2">
             <AccordionItem value="item-1">
               <AccordionTrigger className="hover:no-underline">
                 <h3 className="text-lg font-semibold text-foreground">
@@ -522,9 +535,7 @@ export default function PdfConverter() {
                 )}
               </AccordionContent>
             </AccordionItem>
-          </Accordion>
-
-          <Accordion type="single" collapsible className="w-full">
+         
             <AccordionItem value="item-2">
               <AccordionTrigger className="hover:no-underline">
                 <h3 className="text-lg font-semibold text-foreground">
@@ -545,9 +556,9 @@ export default function PdfConverter() {
                         <TableHeader className="sticky top-0 bg-card z-10">
                           <TableRow>
                             <TableHead>Tanggal</TableHead>
-                            <TableHead>Deskripsi</TableHead>
-                            <TableHead className="text-right">Debit</TableHead>
-                            <TableHead className="text-right">Kredit</TableHead>
+                            <TableHead>Transaksi</TableHead>
+                            <TableHead className="text-right">Pemasukan</TableHead>
+                            <TableHead className="text-right">Pengeluaran</TableHead>
                             <TableHead className="text-right">Saldo</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -555,14 +566,14 @@ export default function PdfConverter() {
                           {data.map((row, index) => (
                             <TableRow key={index}>
                               <TableCell className="font-medium whitespace-nowrap">{row.Tanggal}</TableCell>
-                              <TableCell>{row.Deskripsi}</TableCell>
+                              <TableCell>{row.Transaksi}</TableCell>
                               <TableCell className="text-right font-mono">
-                                {row.Debit.toLocaleString("id-ID", {
+                                {row.Pemasukan.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
                                 })}
                               </TableCell>
                               <TableCell className="text-right font-mono">
-                                {row.Kredit.toLocaleString("id-ID", {
+                                {row.Pengeluaran.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
                                 })}
                               </TableCell>
@@ -647,3 +658,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
