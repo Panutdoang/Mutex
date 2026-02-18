@@ -600,10 +600,10 @@ export default function PdfConverter() {
         )}
 
         <div className={"space-y-6"}>
-          <Accordion type="single" collapsible className="w-full" defaultValue="item-2">
+          <Accordion type="single" collapsible className="w-full" defaultValue={data.length > 0 || rawPdfText ? "item-2" : undefined}>
             <AccordionItem value="item-1">
               <AccordionTrigger className="hover:no-underline text-left">
-                <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2 min-w-0">
                   <span className="text-base sm:text-lg font-semibold text-foreground">
                     Teks Mentah dari:
                   </span>
@@ -628,8 +628,8 @@ export default function PdfConverter() {
             </AccordionItem>
          
             <AccordionItem value="item-2">
-              <AccordionTrigger className="hover:no-underline">
-                <h3 className="text-base sm:text-lg font-semibold text-foreground text-left">
+              <AccordionTrigger className="hover:no-underline text-left">
+                <h3 className="text-base sm:text-lg font-semibold text-foreground">
                   Hasil Analisa ({data.length} transaksi ditemukan)
                 </h3>
               </AccordionTrigger>
@@ -758,5 +758,7 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
 
     
