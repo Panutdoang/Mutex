@@ -106,7 +106,6 @@ export default function PdfConverter() {
         'Laporan Mutasi Rekening',
         'Periode:',
         'Tanggal & Waktu',
-        'Informasi Lainnya',
         'berizin dan diawasi oleh Otoritas Jasa Keuangan',
         'peserta penjaminan Lembaga Penjamin Simpanan'
     ];
@@ -151,7 +150,7 @@ export default function PdfConverter() {
 
             const date = dateMatch[1];
             
-            const amountMatch = block.match(/([+-][\d,.]+)\s+([\d,.]+)/);
+            const amountMatch = block.match(/([+-][\d.,]+)\s+([\d.,]+)/);
             if (!amountMatch) continue;
 
             const nominalString = amountMatch[1];
@@ -349,21 +348,8 @@ export default function PdfConverter() {
   return (
     <Card className="w-full shadow-xl">
       <CardHeader className="text-center">
-        <CardTitle className="text-3xl font-bold text-primary flex items-center justify-center gap-2">
-            <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="text-primary"
-            >
-                <path
-                d="M4 20V4H8L12 12L16 4H20V20H16V9L12 17L8 9V20H4Z"
-                fill="currentColor"
-                />
-            </svg>
-            <span>Mutex</span>
+        <CardTitle className="text-3xl font-bold text-primary">
+          Mutex
         </CardTitle>
         <CardDescription className="text-lg">
           PDF Bank Mutation to Excel Converter
@@ -519,5 +505,3 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
