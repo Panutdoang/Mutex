@@ -273,31 +273,45 @@ export default function PdfConverter() {
     } else if (isBri) {
         const briDateRegex = /^(\d{2}\/\d{2}\/\d{2})/;
         
-        const startMarkers = [
-            "Transaction Date Transaction Description",
-            "Tanggal Transaksi Uraian Transaksi"
-        ];
-        const endMarkers = ["Saldo Awal", "Opening Balance"];
+        const startMarker = "Transaction Description";
+        const endMarker = "Saldo Awal";
 
-        let transactionLines: string[] = [];
-        let inTransactionSection = false;
+        let startIndex = -1;
+        let endIndex = -1;
 
-        for (const line of allLines) {
-            if (!inTransactionSection) {
-                if (startMarkers.some(marker => line.includes(marker))) {
-                    inTransactionSection = true;
-                }
-                continue;
-            }
-
-            if (endMarkers.some(marker => line.trim().startsWith(marker))) {
-                inTransactionSection = false;
+        for (let i = 0; i < allLines.length; i++) {
+            if (allLines[i].includes(startMarker) || allLines[i].includes("Uraian Transaksi")) {
+                startIndex = i + 1;
                 break;
             }
-            
+        }
+        
+        if (startIndex !== -1) {
+            for (let i = startIndex; i < allLines.length; i++) {
+                if (allLines[i].trim().startsWith(endMarker) || allLines[i].trim().startsWith("Opening Balance")) {
+                    endIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (startIndex === -1) {
+            setData([]);
+            return;
+        }
+
+        const relevantLines = endIndex === -1 ? allLines.slice(startIndex) : allLines.slice(startIndex, endIndex);
+
+        let transactionLines: string[] = [];
+        for (const line of relevantLines) {
             const trimmedLine = line.trim();
             const pageNumRegex = /^(Halaman|Page)\s+\d+\s+dari\s+\d+$/;
-            if (trimmedLine && !pageNumRegex.test(trimmedLine) && !line.includes('STATEMENT OF FINANCIAL TRANSACTION') && !line.includes('LAPORAN TRANSAKSI FINANSIAL')) {
+            const isNoise = pageNumRegex.test(trimmedLine) ||
+                            line.includes('STATEMENT OF FINANCIAL TRANSACTION') ||
+                            line.includes('LAPORAN TRANSAKSI FINANSIAL') ||
+                            line.includes('Tanggal Transaksi Uraian Transaksi');
+            
+            if (trimmedLine && !isNoise) {
                 transactionLines.push(line);
             }
         }
@@ -938,5 +952,3 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
