@@ -148,7 +148,7 @@ export default function PdfConverter() {
 
     const isBni = allLines.some(line => line.includes('PT Bank Negara Indonesia'));
     const isBri = allLines.some(line => line.includes('LAPORAN TRANSAKSI FINANSIAL'));
-    const isJenius = allLines.some(line => line.includes('www.jenius.com') && line.includes('PT Bank SMBC Indonesia Tbk'));
+    const isJenius = allLines.some(line => line.includes('www.jenius.com')) && allLines.some(line => line.includes('PT Bank SMBC Indonesia Tbk'));
 
 
     if (isBni) {
@@ -334,18 +334,25 @@ export default function PdfConverter() {
         }
     } else if (isJenius) {
         const jeniusDateRegex = /^\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4}/;
-        const lines = text.split('\n');
-
         let blocks: string[][] = [];
         let currentBlock: string[] = [];
 
-        // 1. Group lines into transaction blocks
-        for (const line of lines) {
-            if (jeniusDateRegex.test(line.trim())) {
+        // 1. Find start of transactions and group lines into blocks
+        let transactionSectionStarted = false;
+        for (const line of allLines) {
+            const trimmedLine = line.trim();
+            if (!transactionSectionStarted && jeniusDateRegex.test(trimmedLine)) {
+                transactionSectionStarted = true;
+            }
+            if (!transactionSectionStarted || !trimmedLine) {
+                continue;
+            }
+
+            if (jeniusDateRegex.test(trimmedLine)) {
                 if (currentBlock.length > 0) blocks.push(currentBlock);
-                currentBlock = [line];
+                currentBlock = [trimmedLine];
             } else if (currentBlock.length > 0) {
-                currentBlock.push(line);
+                currentBlock.push(trimmedLine);
             }
         }
         if (currentBlock.length > 0) blocks.push(currentBlock);
@@ -358,7 +365,6 @@ export default function PdfConverter() {
                 const amountRegex = /\s([+-])\s([\d,.]+)$/;
                 const amountMatch = firstLine.match(amountRegex);
 
-                // A valid block must have a date and amount on the first line
                 if (!dateMatch || !amountMatch) continue;
                 
                 const date = dateMatch[0];
@@ -369,24 +375,24 @@ export default function PdfConverter() {
                 const pengeluaran = sign === '-' ? amountValue : 0;
                 
                 let descriptionParts: string[] = [];
-                // Get initial description from the first line
                 descriptionParts.push(firstLine.replace(date, '').replace(amountMatch[0], '').trim());
 
-                // Process subsequent lines for more description, ignoring metadata
                 for (let i = 1; i < block.length; i++) {
-                    const line = block[i].trim();
-                    const txIdRegex = /^\d{8,}[@A-Z\d]*\s+\|/; // e.g. 20260216... | Uncategorized
-                    const timeRegex = /^\d{2}:\d{2}$/;
+                    const line = block[i];
+                    const txIdRegex = /^\d{8,}[@A-Z\d]*\s+\|/;
+                    const timeOnlyRegex = /^\d{2}:\d{2}$/;
+                    const isBankChargeNote = /^(January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$/.test(line);
 
-                    if (!line || txIdRegex.test(line) || timeRegex.test(line)) {
-                        continue; // Skip empty lines, transaction ID lines, and time-only lines
+                    if (!line || txIdRegex.test(line) || timeOnlyRegex.test(line) || isBankChargeNote) {
+                        continue;
                     }
                     
-                    // Add the line, but remove the leading timestamp if it exists
                     descriptionParts.push(line.replace(/^\d{2}:\d{2}\s/, ''));
                 }
 
                 const description = descriptionParts.join(' ').replace(/\s{2,}/g, ' ').trim();
+
+                if (!description) continue;
 
                 transactions.push({
                     Tanggal: date,
