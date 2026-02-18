@@ -214,7 +214,7 @@ export default function PdfConverter() {
                     if(!dateMatch) continue;
                     
                     const amountPart = parts[parts.length - 1];
-                    const amountMatch = amountPart.match(briAmountRegex);
+                    const amountMatch = amountPart.match(/([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/);
                     if(!amountMatch) continue;
 
                     const [_, debitStr, creditStr, balanceStr] = amountMatch;
@@ -223,7 +223,7 @@ export default function PdfConverter() {
                     description = description.replace(briDateRegex, '');
                     description = description.replace(amountPart, '');
                     description = description.replace(/\d{2}:\d{2}:\d{2}/, ''); // time
-                    description = description.replace(/\d{7}$/, ''); // teller id
+                    description = description.replace(/\s\d{7}\s/, ''); // teller id
                     description = description.trim();
 
                     transactions.push({
@@ -520,47 +520,61 @@ export default function PdfConverter() {
         )}
         
         {!isLoading && data.length > 0 && (
-          <div className="space-y-4 pt-4">
-            <div className="flex justify-between items-center">
-                <h3 className="text-2xl font-semibold text-primary">
-                Hasil Analisa ({data.length} transaksi ditemukan)
+          <Accordion type="single" collapsible className="w-full pt-4">
+            <AccordionItem value="item-2">
+              <AccordionTrigger className="hover:no-underline">
+                <h3 className="text-lg font-semibold text-foreground">
+                  Hasil Analisa ({data.length} transaksi ditemukan)
                 </h3>
-                <Button onClick={handleDownload}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download Excel
-                </Button>
-            </div>
-            <div className="border rounded-lg max-h-[500px] overflow-auto">
-              <Table>
-                <TableHeader className="sticky top-0 bg-card z-10">
-                  <TableRow>
-                    <TableHead>Tanggal</TableHead>
-                    <TableHead>Deskripsi</TableHead>
-                    <TableHead className="text-right">Debit</TableHead>
-                    <TableHead className="text-right">Kredit</TableHead>
-                    <TableHead className="text-right">Saldo</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.map((row, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium whitespace-nowrap">{row.Tanggal}</TableCell>
-                      <TableCell>{row.Deskripsi}</TableCell>
-                      <TableCell className="text-right font-mono">
-                        {row.Debit.toLocaleString("id-ID", {minimumFractionDigits: 2})}
-                      </TableCell>
-                       <TableCell className="text-right font-mono">
-                        {row.Kredit.toLocaleString("id-ID", {minimumFractionDigits: 2})}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {row.Saldo.toLocaleString("id-ID", {minimumFractionDigits: 2})}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4 pt-4">
+                  <div className="flex justify-end items-center">
+                    <Button onClick={handleDownload}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download Excel
+                    </Button>
+                  </div>
+                  <div className="border rounded-lg max-h-[500px] overflow-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-card z-10">
+                        <TableRow>
+                          <TableHead>Tanggal</TableHead>
+                          <TableHead>Deskripsi</TableHead>
+                          <TableHead className="text-right">Debit</TableHead>
+                          <TableHead className="text-right">Kredit</TableHead>
+                          <TableHead className="text-right">Saldo</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data.map((row, index) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium whitespace-nowrap">{row.Tanggal}</TableCell>
+                            <TableCell>{row.Deskripsi}</TableCell>
+                            <TableCell className="text-right font-mono">
+                              {row.Debit.toLocaleString("id-ID", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {row.Kredit.toLocaleString("id-ID", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {row.Saldo.toLocaleString("id-ID", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         )}
 
         {!isLoading && rawPdfText && data.length === 0 && (
@@ -625,5 +639,3 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
