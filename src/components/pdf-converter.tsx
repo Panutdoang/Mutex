@@ -11,6 +11,7 @@ import {
   EyeOff,
   X as XIcon,
   FileCheck2,
+  File as FileIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -114,12 +115,12 @@ export default function PdfConverter() {
         let blocks: string[][] = [];
         let currentBlock: string[] = [];
 
-        const startMarker = 'Tanggal & Waktu Rincian Transaksi Nominal (IDR) Saldo (IDR)';
+        const startMarkers = ['Tanggal & Waktu Rincian Transaksi Nominal (IDR) Saldo (IDR)', 'Saldo Awal'];
         const endMarkers = ['Saldo Akhir', 'Informasi Lainnya'];
 
         for (const line of allLines) {
             const trimmed = line.trim();
-            if (trimmed.startsWith(startMarker) || trimmed.startsWith('Saldo Awal')) {
+            if (startMarkers.some(marker => trimmed.startsWith(marker))) {
                 inTransactionSection = true;
                 if(currentBlock.length > 0) blocks.push(currentBlock);
                 currentBlock = [];
@@ -130,7 +131,7 @@ export default function PdfConverter() {
                 inTransactionSection = false;
                 break;
             }
-            if (!inTransactionSection || !trimmed) continue;
+            if (!inTransactionSection || !trimmed || trimmed.includes('peserta penjaminan Lembaga Penjamin Simpanan')) continue;
             
             if (bniDateRegex.test(trimmed)) {
                 if (currentBlock.length > 0) {
@@ -152,7 +153,6 @@ export default function PdfConverter() {
 
             const date = dateMatch[1];
             
-            // Find line with amount and balance
             let amountLine = '';
             let amountMatch: RegExpMatchArray | null = null;
             let amountLineIndex = -1;
@@ -168,7 +168,6 @@ export default function PdfConverter() {
             }
 
             if (!amountMatch) {
-                // Check if it's on the same line as date
                 const sameLineAmountMatch = combinedText.match(bniAmountRegex);
                 if(sameLineAmountMatch){
                     amountMatch = sameLineAmountMatch;
@@ -184,7 +183,6 @@ export default function PdfConverter() {
             const pemasukan = nominalString.startsWith('+') ? parseCurrency(nominalString.substring(1)) : 0;
             const saldo = parseCurrency(saldoString);
 
-            // Construct description from other lines
             let descriptionLines = [...block];
             if(amountLineIndex !== -1) {
                 descriptionLines.splice(amountLineIndex, 1);
@@ -193,7 +191,7 @@ export default function PdfConverter() {
                 .replace(date, '')
                 .replace(/\d{2}:\d{2}:\d{2} WIB/, '')
                 .trim();
-            if (amountMatch && amountLine === '') { // if amount was on same line
+            if (amountMatch && amountLine === '') { 
                 description = description.replace(amountMatch[0], '');
             }
 
@@ -214,7 +212,7 @@ export default function PdfConverter() {
             const trimmed = line.trim();
             if (!trimmed) continue;
 
-            if (trimmed.startsWith('Transaction Date')) {
+            if (trimmed.includes('Transaction Date')) {
                 transactionLinesStarted = true;
                 continue;
             }
@@ -226,29 +224,42 @@ export default function PdfConverter() {
             if(transactionLinesStarted && briDateRegex.test(trimmed)){
                  try {
                     const parts = trimmed.split(/\s{2,}/);
+                    if (parts.length < 4) continue;
+
                     const dateMatch = trimmed.match(briDateRegex);
                     if(!dateMatch) continue;
                     
                     const amountPart = parts[parts.length - 1];
                     const amountMatch = amountPart.match(/([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/);
-                    if(!amountMatch) continue;
-
-                    const [_, debitStr, creditStr, balanceStr] = amountMatch;
                     
-                    let description = trimmed;
-                    description = description.replace(briDateRegex, '');
-                    description = description.replace(amountPart, '');
-                    description = description.replace(/\d{2}:\d{2}:\d{2}/, ''); // time
-                    description = description.replace(/\s\d{7}\s/, ''); // teller id
-                    description = description.trim();
+                    if(amountMatch){
+                        const [_, debitStr, creditStr, balanceStr] = amountMatch;
+                        
+                        let description = parts.slice(1, -1).join(' ').trim();
+                        description = description.replace(/\d{6,}/, '').trim(); // Remove long numbers (like teller id)
 
-                    transactions.push({
-                        Tanggal: dateMatch[1],
-                        Transaksi: description,
-                        Pemasukan: parseCurrency(creditStr),
-                        Pengeluaran: parseCurrency(debitStr),
-                        Saldo: parseCurrency(balanceStr),
-                    });
+                        transactions.push({
+                            Tanggal: dateMatch[1],
+                            Transaksi: description,
+                            Pemasukan: parseCurrency(creditStr),
+                            Pengeluaran: parseCurrency(debitStr),
+                            Saldo: parseCurrency(balanceStr),
+                        });
+                    } else { // Handle cases where amount is split
+                         const balanceStr = parts.pop()?.trim() || '0';
+                         const creditStr = parts.pop()?.trim() || '0';
+                         const debitStr = parts.pop()?.trim() || '0';
+                         let description = parts.slice(1).join(' ').trim();
+                         description = description.replace(/\d{6,}/, '').trim(); // Remove long numbers (like teller id)
+
+                         transactions.push({
+                            Tanggal: dateMatch[1],
+                            Transaksi: description,
+                            Pemasukan: parseCurrency(creditStr),
+                            Pengeluaran: parseCurrency(debitStr),
+                            Saldo: parseCurrency(balanceStr),
+                        });
+                    }
 
                 } catch(e) {
                     console.error("Failed to parse BRI line:", line, e);
@@ -272,12 +283,12 @@ export default function PdfConverter() {
     setData([]);
     setRawPdfText(null);
     
-    const originalPdfData = pdfData.slice(0); // Make a copy before trying to use it
+    const originalPdfData = pdfData.slice(0);
 
     try {
         const typedArray = new Uint8Array(pdfData);
         const pdf = await pdfjs.getDocument({ data: typedArray, password: filePassword }).promise;
-        isSuccess.current = true; // Set success flag
+        isSuccess.current = true;
 
         let fullText = "";
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -320,7 +331,7 @@ export default function PdfConverter() {
     } catch (err: any) {
         if (err.name === 'PasswordException') {
             isSuccess.current = false;
-            const bufferCopy = originalPdfData.slice(0); // Use the original copy here
+            const bufferCopy = originalPdfData.slice(0);
             setPendingData(bufferCopy);
             setIsPasswordDialogOpen(true);
             if (filePassword) {
@@ -375,7 +386,8 @@ export default function PdfConverter() {
   const handlePasswordSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (pendingData) {
-      parsePdf(pendingData, password);
+      const pendingDataCopy = pendingData.slice(0);
+      parsePdf(pendingDataCopy, password);
     }
   };
 
@@ -577,33 +589,33 @@ export default function PdfConverter() {
                         Download Excel
                       </Button>
                     </div>
-                    <div className="border rounded-lg max-h-[500px] overflow-auto">
-                      <Table>
+                    <div className="border rounded-lg max-h-[500px] overflow-y-auto">
+                      <Table className="table-fixed">
                         <TableHeader className="sticky top-0 bg-card z-10">
                           <TableRow>
-                            <TableHead>Tanggal</TableHead>
-                            <TableHead>Transaksi</TableHead>
-                            <TableHead className="text-right">Pemasukan</TableHead>
-                            <TableHead className="text-right">Pengeluaran</TableHead>
-                            <TableHead className="text-right">Saldo</TableHead>
+                            <TableHead className="text-xs">Tanggal</TableHead>
+                            <TableHead className="text-xs">Transaksi</TableHead>
+                            <TableHead className="text-right text-xs">Pemasukan</TableHead>
+                            <TableHead className="text-right text-xs">Pengeluaran</TableHead>
+                            <TableHead className="text-right text-xs">Saldo</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {data.map((row, index) => (
                             <TableRow key={index}>
-                              <TableCell className="font-medium whitespace-nowrap">{row.Tanggal}</TableCell>
-                              <TableCell>{row.Transaksi}</TableCell>
-                              <TableCell className="text-right font-mono">
+                              <TableCell className="font-medium text-xs">{row.Tanggal}</TableCell>
+                              <TableCell className="text-xs">{row.Transaksi}</TableCell>
+                              <TableCell className="text-right font-mono text-xs">
                                 {row.Pemasukan > 0 ? row.Pemasukan.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
                                 }) : "0.00"}
                               </TableCell>
-                              <TableCell className="text-right font-mono">
+                              <TableCell className="text-right font-mono text-xs">
                                 {row.Pengeluaran > 0 ? row.Pengeluaran.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
                                 }) : "0.00"}
                               </TableCell>
-                              <TableCell className="text-right font-mono">
+                              <TableCell className="text-right font-mono text-xs">
                                 {row.Saldo.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
                                 })}
@@ -693,3 +705,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
