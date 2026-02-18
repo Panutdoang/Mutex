@@ -148,6 +148,8 @@ export default function PdfConverter() {
 
     const isBni = allLines.some(line => line.includes('PT Bank Negara Indonesia'));
     const isBri = allLines.some(line => line.includes('LAPORAN TRANSAKSI FINANSIAL'));
+    const isJenius = allLines.some(line => line.includes('www.jenius.com') && line.includes('PT Bank SMBC Indonesia Tbk'));
+
 
     if (isBni) {
         const bniDateRegex = /^(\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4})/;
@@ -328,6 +330,74 @@ export default function PdfConverter() {
                 } catch (e) {
                     console.error("Failed to parse BRI block:", block.join('\n'), e);
                 }
+            }
+        }
+    } else if (isJenius) {
+        const jeniusDateRegex = /^\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4}/;
+        const lines = text.split('\n');
+
+        let blocks: string[][] = [];
+        let currentBlock: string[] = [];
+
+        // 1. Group lines into transaction blocks
+        for (const line of lines) {
+            if (jeniusDateRegex.test(line.trim())) {
+                if (currentBlock.length > 0) blocks.push(currentBlock);
+                currentBlock = [line];
+            } else if (currentBlock.length > 0) {
+                currentBlock.push(line);
+            }
+        }
+        if (currentBlock.length > 0) blocks.push(currentBlock);
+
+        // 2. Parse each block
+        for (const block of blocks) {
+            try {
+                const firstLine = block[0];
+                const dateMatch = firstLine.match(jeniusDateRegex);
+                const amountRegex = /\s([+-])\s([\d,.]+)$/;
+                const amountMatch = firstLine.match(amountRegex);
+
+                // A valid block must have a date and amount on the first line
+                if (!dateMatch || !amountMatch) continue;
+                
+                const date = dateMatch[0];
+                const sign = amountMatch[1];
+                const amountValue = parseCurrency(amountMatch[2]);
+                
+                const pemasukan = sign === '+' ? amountValue : 0;
+                const pengeluaran = sign === '-' ? amountValue : 0;
+                
+                let descriptionParts: string[] = [];
+                // Get initial description from the first line
+                descriptionParts.push(firstLine.replace(date, '').replace(amountMatch[0], '').trim());
+
+                // Process subsequent lines for more description, ignoring metadata
+                for (let i = 1; i < block.length; i++) {
+                    const line = block[i].trim();
+                    const txIdRegex = /^\d{8,}[@A-Z\d]*\s+\|/; // e.g. 20260216... | Uncategorized
+                    const timeRegex = /^\d{2}:\d{2}$/;
+
+                    if (!line || txIdRegex.test(line) || timeRegex.test(line)) {
+                        continue; // Skip empty lines, transaction ID lines, and time-only lines
+                    }
+                    
+                    // Add the line, but remove the leading timestamp if it exists
+                    descriptionParts.push(line.replace(/^\d{2}:\d{2}\s/, ''));
+                }
+
+                const description = descriptionParts.join(' ').replace(/\s{2,}/g, ' ').trim();
+
+                transactions.push({
+                    Tanggal: date,
+                    Transaksi: description,
+                    Pemasukan: pemasukan,
+                    Pengeluaran: pengeluaran,
+                    Saldo: 0, // Jenius doesn't provide running balance
+                });
+
+            } catch (e) {
+                console.error("Failed to parse Jenius block:", block.join('\n'), e);
             }
         }
     }
@@ -817,4 +887,3 @@ export default function PdfConverter() {
   );
 }
 
-    
