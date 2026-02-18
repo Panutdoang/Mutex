@@ -151,38 +151,37 @@ export default function PdfConverter() {
 
     // BNI Parser
     const bniDateRegex = /^(\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4})/;
-    const bniAmountRegex = /([+-][\d.,]+)\s+([\d.,]+)$/;
+    const bniAmountRegex = /^([+-][\d.,]+)\s+([\d.,]+)$/;
 
     // BRI Parser
     const briDateRegex = /^(\d{2}\/\d{2}\/\d{2})/;
-    const briAmountRegex = /([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/;
 
 
     const isBni = allLines.some(line => line.includes('PT Bank Negara Indonesia'));
     const isBri = allLines.some(line => line.includes('LAPORAN TRANSAKSI FINANSIAL'));
 
 
-    const blocks: string[] = [];
-    let currentBlock: string[] = [];
-    let inTransactionSection = false;
-
-    const bniIgnoreMarkers = [
-        'PT Bank Negara Indonesia', 'Laporan Mutasi Rekening', 'Periode:',
-        'Tanggal & Waktu', 'berizin dan diawasi oleh Otoritas Jasa Keuangan',
-        'peserta penjaminan Lembaga Penjamin Simpanan'
-    ];
-    const bniEndMarkers = ['Saldo Akhir', 'Informasi Lainnya'];
-
     if (isBni) {
+        const blocks: string[][] = [];
+        let currentBlock: string[] = [];
+        let inTransactionSection = false;
+
+        const bniIgnoreMarkers = [
+            'PT Bank Negara Indonesia', 'Laporan Mutasi Rekening', 'Periode:',
+            'Tanggal & Waktu', 'berizin dan diawasi oleh Otoritas Jasa Keuangan',
+            'peserta penjaminan Lembaga Penjamin Simpanan'
+        ];
+        const bniEndMarkers = ['Saldo Akhir', 'Informasi Lainnya'];
+
         for (const line of allLines) {
             const trimmed = line.trim();
             if (!trimmed) continue;
             
             if (bniEndMarkers.some(marker => trimmed.startsWith(marker))) {
-                inTransactionSection = false;
                 if (currentBlock.length > 0) {
-                    blocks.push(currentBlock.join(' '));
+                    blocks.push(currentBlock);
                 }
+                inTransactionSection = false;
                 currentBlock = [];
                 break; 
             }
@@ -190,11 +189,16 @@ export default function PdfConverter() {
             if (bniIgnoreMarkers.some(marker => trimmed.includes(marker)) || /^\d+ dari \d+$/.test(trimmed)) {
                 continue;
             }
+            
+            if (trimmed.startsWith('Saldo Awal')) {
+                inTransactionSection = true;
+                continue; // Skip saldo awal line, begin processing from next line
+            }
 
             if (bniDateRegex.test(trimmed)) {
                 inTransactionSection = true;
                 if (currentBlock.length > 0) {
-                    blocks.push(currentBlock.join(' '));
+                    blocks.push(currentBlock);
                 }
                 currentBlock = [trimmed];
             } else if (inTransactionSection) {
@@ -202,30 +206,56 @@ export default function PdfConverter() {
             }
         }
         if (currentBlock.length > 0) {
-            blocks.push(currentBlock.join(' '));
+            blocks.push(currentBlock);
         }
         
-        for (const block of blocks) {
+        for (const blockLines of blocks) {
             try {
-                const dateMatch = block.match(bniDateRegex);
+                const firstLine = blockLines[0] || '';
+                const dateMatch = firstLine.match(bniDateRegex);
                 if (!dateMatch) continue;
                 const date = dateMatch[1];
                 
-                const amountMatch = block.match(bniAmountRegex);
-                if (!amountMatch) continue;
+                let nominalString = '';
+                let saldoString = '';
+                let amountLineIndex = -1;
 
-                const nominalString = amountMatch[1];
-                const saldoString = amountMatch[2];
+                for (let i = 0; i < blockLines.length; i++) {
+                    const line = blockLines[i];
+                    const amountMatch = line.match(bniAmountRegex);
+                    if (amountMatch) {
+                        nominalString = amountMatch[1];
+                        saldoString = amountMatch[2];
+                        amountLineIndex = i;
+                        break;
+                    }
+                }
+
+                if (amountLineIndex === -1) continue;
 
                 const pengeluaran = nominalString.startsWith('-') ? parseCurrency(nominalString.substring(1)) : 0;
                 const pemasukan = nominalString.startsWith('+') ? parseCurrency(nominalString.substring(1)) : 0;
                 const saldo = parseCurrency(saldoString);
+                
+                const descriptionParts: string[] = [];
 
-                let description = block;
-                description = description.replace(bniDateRegex, '');
-                description = description.replace(bniAmountRegex, '');
-                description = description.replace(/\d{2}:\d{2}:\d{2} WIB/, '');
-                description = description.trim().replace(/\s{2,}/g, ' ');
+                // Add part of first line if it contains description
+                descriptionParts.push(firstLine.replace(bniDateRegex, '').trim());
+
+                // Add all lines that are not the amount line
+                for (let i = 0; i < blockLines.length; i++) {
+                    if (i !== amountLineIndex) {
+                        // For the first line, we've already processed it
+                        if (i > 0) {
+                            descriptionParts.push(blockLines[i]);
+                        }
+                    }
+                }
+                
+                let description = descriptionParts.filter(p => p).join(' ')
+                    .replace(/\d{2}:\d{2}:\d{2} WIB/, '')
+                    .trim()
+                    .replace(/\s{2,}/g, ' ');
 
                 transactions.push({
                     Tanggal: date,
@@ -236,7 +266,7 @@ export default function PdfConverter() {
                 });
 
             } catch (e) {
-                console.error("Failed to parse BNI block:", block, e);
+                console.error("Failed to parse BNI block:", blockLines, e);
             }
         }
     } else if (isBri) {
@@ -302,11 +332,13 @@ export default function PdfConverter() {
     setError(null);
     setData([]);
     setRawPdfText(null);
+    if(pdfDoc) {
+      pdfDoc.destroy();
+    }
     setPdfDoc(null);
 
     try {
-        const pdfDataForDocument = pdfData.slice(0);
-        const typedArray = new Uint8Array(pdfDataForDocument);
+        const typedArray = new Uint8Array(pdfData);
         const pdf = await pdfjs.getDocument({ data: typedArray, password: filePassword }).promise;
         setPdfDoc(pdf);
 
@@ -364,7 +396,7 @@ export default function PdfConverter() {
     } finally {
       setIsLoading(false);
     }
-  }, [pdfjs, parseBankStatement]);
+  }, [pdfjs, parseBankStatement, pdfDoc]);
 
   const processFile = useCallback((file: File) => {
     if (!pdfjs) {
@@ -453,6 +485,9 @@ export default function PdfConverter() {
       setData([]);
       setRawPdfText(null);
       setError(null);
+      if (pdfDoc) {
+        pdfDoc.destroy();
+      }
       setPdfDoc(null);
       setIsLoading(false);
       setPendingData(null);
@@ -569,7 +604,7 @@ export default function PdfConverter() {
         )}
 
         <div className={"space-y-6"}>
-          <Accordion type="single" collapsible className="w-full">
+          <Accordion type="single" collapsible className="w-full" defaultValue="item-2">
             <AccordionItem value="item-1">
               <AccordionTrigger className="hover:no-underline">
                 <h3 className="text-lg font-semibold text-foreground">
@@ -623,14 +658,14 @@ export default function PdfConverter() {
                               <TableCell className="font-medium whitespace-nowrap">{row.Tanggal}</TableCell>
                               <TableCell>{row.Transaksi}</TableCell>
                               <TableCell className="text-right font-mono">
-                                {row.Pemasukan.toLocaleString("id-ID", {
+                                {row.Pemasukan > 0 ? row.Pemasukan.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
-                                })}
+                                }) : "0.00"}
                               </TableCell>
                               <TableCell className="text-right font-mono">
-                                {row.Pengeluaran.toLocaleString("id-ID", {
+                                {row.Pengeluaran > 0 ? row.Pengeluaran.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
-                                })}
+                                }) : "0.00"}
                               </TableCell>
                               <TableCell className="text-right font-mono">
                                 {row.Saldo.toLocaleString("id-ID", {
@@ -645,7 +680,7 @@ export default function PdfConverter() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-center rounded-md border border-dashed p-8 text-muted-foreground">
-                    {rawPdfText && !isLoading ? (
+                    {selectedFile && !isLoading ? (
                         <Alert variant="default" className="w-full text-left">
                             <AlertTitle>Tidak ada transaksi yang ditemukan</AlertTitle>
                             <AlertDescription>
@@ -703,7 +738,10 @@ export default function PdfConverter() {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setIsPasswordDialogOpen(false)}>Batal</Button>
+              <Button type="button" variant="secondary" onClick={() => {
+                setIsPasswordDialogOpen(false);
+                handleClearFile({ stopPropagation: () => {} } as React.MouseEvent);
+              }}>Batal</Button>
               <Button type="submit">Buka</Button>
             </DialogFooter>
           </form>
@@ -712,5 +750,3 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
