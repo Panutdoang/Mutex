@@ -103,111 +103,113 @@ export default function PdfConverter() {
     const allLines = text.split('\n');
     const transactions: Transaction[] = [];
 
-    // BNI Parser
-    const bniDateRegex = /^(\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4})/;
-    const bniAmountRegex = /([+-][\d.,]+)\s+([\d.,]+)/;
-
-    // BRI Parser
-    const briDateRegex = /^(\d{2}\/\d{2}\/\d{2})/;
-
-
     const isBni = allLines.some(line => line.includes('PT Bank Negara Indonesia'));
     const isBri = allLines.some(line => line.includes('LAPORAN TRANSAKSI FINANSIAL'));
 
-
     if (isBni) {
-        const blocks: string[][] = [];
-        let currentBlock: string[] = [];
+        const bniDateRegex = /^(\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4})/;
+        const bniAmountRegex = /([+-][\d,.]+)\s+([\d,.]+)$/;
+        
         let inTransactionSection = false;
+        let blocks: string[][] = [];
+        let currentBlock: string[] = [];
 
-        const bniIgnoreMarkers = [
-            'PT Bank Negara Indonesia', 'Laporan Mutasi Rekening', 'Periode:',
-            'Tanggal & Waktu', 'berizin dan diawasi oleh Otoritas Jasa Keuangan',
-            'peserta penjaminan Lembaga Penjamin Simpanan',
-            'Rincian Transaksi Nominal (IDR) Saldo (IDR)'
-        ];
-        const bniEndMarkers = ['Saldo Akhir', 'Informasi Lainnya'];
+        const startMarker = 'Tanggal & Waktu Rincian Transaksi Nominal (IDR) Saldo (IDR)';
+        const endMarkers = ['Saldo Akhir', 'Informasi Lainnya'];
 
         for (const line of allLines) {
             const trimmed = line.trim();
-            if (!trimmed) continue;
-            
-            if (bniEndMarkers.some(marker => trimmed.startsWith(marker))) {
-                if (currentBlock.length > 0) {
-                    blocks.push(currentBlock);
-                }
-                inTransactionSection = false;
-                currentBlock = [];
-                break; 
-            }
-            
-            if (trimmed.startsWith('Saldo Awal')) {
+            if (trimmed.startsWith(startMarker) || trimmed.startsWith('Saldo Awal')) {
                 inTransactionSection = true;
-                continue; // Skip saldo awal line, begin processing from next line
-            }
-            
-            if (!inTransactionSection) continue;
-
-            if (bniIgnoreMarkers.some(marker => trimmed.includes(marker)) || /^\d+ dari \d+$/.test(trimmed)) {
+                if(currentBlock.length > 0) blocks.push(currentBlock);
+                currentBlock = [];
                 continue;
             }
+            if (endMarkers.some(marker => trimmed.startsWith(marker))) {
+                if (currentBlock.length > 0) blocks.push(currentBlock);
+                inTransactionSection = false;
+                break;
+            }
+            if (!inTransactionSection || !trimmed) continue;
             
             if (bniDateRegex.test(trimmed)) {
                 if (currentBlock.length > 0) {
                     blocks.push(currentBlock);
                 }
                 currentBlock = [trimmed];
-            } else {
-                if(currentBlock.length > 0) {
-                    currentBlock.push(trimmed);
-                }
+            } else if (currentBlock.length > 0) {
+                currentBlock.push(trimmed);
             }
         }
         if (currentBlock.length > 0) {
             blocks.push(currentBlock);
         }
-        
-        for (const blockLines of blocks) {
-            try {
-                const combinedLines = blockLines.join(' ');
-                
-                const dateMatch = combinedLines.match(bniDateRegex);
-                if (!dateMatch) continue;
-                const date = dateMatch[1];
-                
-                const amountMatch = combinedLines.match(bniAmountRegex);
-                if (!amountMatch) {
+
+        for (const block of blocks) {
+            let combinedText = block.join(' ');
+            const dateMatch = combinedText.match(bniDateRegex);
+            if (!dateMatch) continue;
+
+            const date = dateMatch[1];
+            
+            // Find line with amount and balance
+            let amountLine = '';
+            let amountMatch: RegExpMatchArray | null = null;
+            let amountLineIndex = -1;
+
+            for(let i = 0; i < block.length; i++) {
+                const lineAmountMatch = block[i].match(bniAmountRegex);
+                if (lineAmountMatch) {
+                    amountLine = block[i];
+                    amountMatch = lineAmountMatch;
+                    amountLineIndex = i;
+                    break;
+                }
+            }
+
+            if (!amountMatch) {
+                // Check if it's on the same line as date
+                const sameLineAmountMatch = combinedText.match(bniAmountRegex);
+                if(sameLineAmountMatch){
+                    amountMatch = sameLineAmountMatch;
+                } else {
                     continue;
                 }
-
-                const nominalString = amountMatch[1];
-                const saldoString = amountMatch[2];
-
-                const pengeluaran = nominalString.startsWith('-') ? parseCurrency(nominalString.substring(1)) : 0;
-                const pemasukan = nominalString.startsWith('+') ? parseCurrency(nominalString.substring(1)) : 0;
-                const saldo = parseCurrency(saldoString);
-                
-                let description = combinedLines
-                    .replace(amountMatch[0], '')
-                    .replace(bniDateRegex, '')
-                    .replace(/\d{2}:\d{2}:\d{2} WIB/, '')
-                    .trim()
-                    .replace(/\s{2,}/g, ' ');
-
-                transactions.push({
-                    Tanggal: date,
-                    Transaksi: description,
-                    Pemasukan: pemasukan,
-                    Pengeluaran: pengeluaran,
-                    Saldo: saldo,
-                });
-
-            } catch (e) {
-                console.error("Failed to parse BNI block:", blockLines, e);
             }
+            
+            const nominalString = amountMatch[1];
+            const saldoString = amountMatch[2];
+
+            const pengeluaran = nominalString.startsWith('-') ? parseCurrency(nominalString.substring(1)) : 0;
+            const pemasukan = nominalString.startsWith('+') ? parseCurrency(nominalString.substring(1)) : 0;
+            const saldo = parseCurrency(saldoString);
+
+            // Construct description from other lines
+            let descriptionLines = [...block];
+            if(amountLineIndex !== -1) {
+                descriptionLines.splice(amountLineIndex, 1);
+            }
+            let description = descriptionLines.join(' ')
+                .replace(date, '')
+                .replace(/\d{2}:\d{2}:\d{2} WIB/, '')
+                .trim();
+            if (amountMatch && amountLine === '') { // if amount was on same line
+                description = description.replace(amountMatch[0], '');
+            }
+
+            description = description.replace(/\s{2,}/g, ' ').trim();
+
+            transactions.push({
+                Tanggal: date,
+                Transaksi: description,
+                Pemasukan: pemasukan,
+                Pengeluaran: pengeluaran,
+                Saldo: saldo,
+            });
         }
     } else if (isBri) {
         let transactionLinesStarted = false;
+        const briDateRegex = /^(\d{2}\/\d{2}\/\d{2})/;
         for (const line of allLines) {
             const trimmed = line.trim();
             if (!trimmed) continue;
@@ -318,7 +320,8 @@ export default function PdfConverter() {
     } catch (err: any) {
         if (err.name === 'PasswordException') {
             isSuccess.current = false;
-            setPendingData(originalPdfData);
+            const bufferCopy = originalPdfData.slice(0); // Use the original copy here
+            setPendingData(bufferCopy);
             setIsPasswordDialogOpen(true);
             if (filePassword) {
                 setError("Password salah. Silakan coba lagi.");
@@ -568,8 +571,8 @@ export default function PdfConverter() {
               <AccordionContent>
                 {data.length > 0 ? (
                   <div className="space-y-4 pt-4">
-                    <div className="flex justify-end items-center">
-                      <Button onClick={handleDownload}>
+                    <div className="flex items-center">
+                      <Button onClick={handleDownload} className="w-full">
                         <Download className="mr-2 h-4 w-4" />
                         Download Excel
                       </Button>
@@ -609,6 +612,12 @@ export default function PdfConverter() {
                           ))}
                         </TableBody>
                       </Table>
+                    </div>
+                    <div className="flex items-center">
+                      <Button onClick={handleDownload} className="w-full">
+                        <Download className="mr-2 h-4 w-4" />
+                        Download Excel
+                      </Button>
                     </div>
                   </div>
                 ) : (
