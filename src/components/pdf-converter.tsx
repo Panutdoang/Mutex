@@ -159,21 +159,34 @@ export default function PdfConverter() {
 
         const startMarkers = ['Tanggal & Waktu Rincian Transaksi Nominal (IDR) Saldo (IDR)', 'Saldo Awal'];
         const endMarkers = ['Saldo Akhir', 'Informasi Lainnya'];
+        const noise = [
+            'peserta penjaminan Lembaga Penjamin Simpanan',
+            'Tanggal & Waktu Rincian Transaksi Nominal (IDR) Saldo (IDR)',
+            'lanjutan dari halaman sebelumnya'
+        ];
 
         for (const line of allLines) {
             const trimmed = line.trim();
+
             if (startMarkers.some(marker => trimmed.startsWith(marker))) {
                 inTransactionSection = true;
                 if(currentBlock.length > 0) blocks.push(currentBlock);
                 currentBlock = [];
                 continue;
             }
-            if (endMarkers.some(marker => trimmed.startsWith(marker))) {
+
+            if (inTransactionSection && endMarkers.some(marker => trimmed.startsWith(marker))) {
                 if (currentBlock.length > 0) blocks.push(currentBlock);
                 inTransactionSection = false;
-                break;
+                break; // Stop processing lines completely after this marker
             }
-            if (!inTransactionSection || !trimmed || trimmed.includes('peserta penjaminan Lembaga Penjamin Simpanan')) continue;
+
+            if (!inTransactionSection || !trimmed) continue;
+            
+            // Explicitly ignore known noise/header/footer lines within the transaction section
+            if (noise.some(n => trimmed.includes(n)) || /halaman \d+ dari \d+/.test(trimmed.toLowerCase())) {
+                continue;
+            }
             
             if (bniDateRegex.test(trimmed)) {
                 if (currentBlock.length > 0) {
@@ -184,7 +197,7 @@ export default function PdfConverter() {
                 currentBlock.push(trimmed);
             }
         }
-        if (currentBlock.length > 0) {
+        if (inTransactionSection && currentBlock.length > 0) {
             blocks.push(currentBlock);
         }
 
@@ -248,44 +261,61 @@ export default function PdfConverter() {
             });
         }
     } else if (isBri) {
-        let inTransactionSection = false;
         const briDateRegex = /^(\d{2}\/\d{2}\/\d{2})/;
+        let startIndex = -1;
+        let endIndex = -1;
 
-        for (const line of allLines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-
-            if (trimmed.includes('Transaction Date') && trimmed.includes('Description')) {
-                inTransactionSection = true;
-                continue;
+        // 1. Find the boundaries of the transaction table
+        for (let i = 0; i < allLines.length; i++) {
+            const line = allLines[i];
+            if (line.includes('Transaction Date') && line.includes('Description') && line.includes('Debit')) {
+                if (startIndex === -1) startIndex = i + 1;
             }
-             if (trimmed.startsWith('Opening Balance') || trimmed.startsWith('Saldo Awal')) {
-                inTransactionSection = false;
-                continue; 
+            if (startIndex !== -1 && (line.startsWith('Opening Balance') || line.startsWith('Saldo Awal'))) {
+                endIndex = i;
+                break;
             }
+        }
+        
+        // 2. If we have a clear section, process only those lines
+        if (startIndex !== -1) {
+            const linesToProcess = allLines.slice(startIndex, endIndex === -1 ? allLines.length : endIndex);
+            let blocks: string[][] = [];
+            let currentBlock: string[] = [];
 
-            if (inTransactionSection && briDateRegex.test(trimmed)) {
-                try {
-                    const dateMatch = trimmed.match(briDateRegex);
+            // 3. Group lines into blocks, where each block is one transaction
+            for (const line of linesToProcess) {
+                const trimmed = line.trim();
+                if (!trimmed || (trimmed.includes('Transaction Date') && trimmed.includes('Description'))) continue; 
+
+                if (briDateRegex.test(trimmed)) {
+                    if (currentBlock.length > 0) blocks.push(currentBlock);
+                    currentBlock = [trimmed];
+                } else if (currentBlock.length > 0) {
+                    currentBlock.push(trimmed);
+                }
+            }
+            if (currentBlock.length > 0) blocks.push(currentBlock);
+
+            // 4. Parse each block to extract details
+            for (const block of blocks) {
+                const combinedText = block.join(' ');
+                 try {
+                    const dateMatch = combinedText.match(briDateRegex);
                     if (!dateMatch) continue;
                     
                     const date = dateMatch[1];
-                    const lineContent = trimmed;
-
-                    // Regex to robustly find debit, credit, and balance at the end of the line
                     const amountRegex = /(\d[\d.,]*)\s+(\d[\d.,]*)\s+(\d[\d.,]*)$/;
-                    const amountMatch = lineContent.match(amountRegex);
+                    const amountMatch = combinedText.match(amountRegex);
 
                     if (amountMatch) {
                         const [fullAmountMatch, debitStr, creditStr, balanceStr] = amountMatch;
                         
-                        let description = lineContent.substring(0, lineContent.indexOf(fullAmountMatch)).trim();
+                        let description = combinedText.substring(0, combinedText.lastIndexOf(fullAmountMatch)).trim();
                         
                         description = description.replace(briDateRegex, '').trim();
                         description = description.replace(/^\d{2}:\d{2}:\d{2}\s+/, '').trim();
-                        
-                        // Clean up teller ID from the end of the description
-                        description = description.replace(/\s\d{7,8}$/, '').trim();
+                        description = description.replace(/\s\d{7,8}$/, '').trim(); // Clean up teller ID
 
                         transactions.push({
                             Tanggal: date,
@@ -296,7 +326,7 @@ export default function PdfConverter() {
                         });
                     }
                 } catch (e) {
-                    console.error("Failed to parse BRI line:", line, e);
+                    console.error("Failed to parse BRI block:", block.join('\n'), e);
                 }
             }
         }
