@@ -52,6 +52,7 @@ import { cn } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { locales } from "@/lib/locales";
 
 
 interface Transaction {
@@ -91,23 +92,11 @@ export default function PdfConverter() {
   const [rawPdfText, setRawPdfText] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedLanguage, setSelectedLanguage] = useState("Bahasa Indonesia");
+  const [selectedLanguage, setSelectedLanguage] = useState<keyof typeof locales>("Bahasa Indonesia");
   const isSuccess = useRef(false);
   const isMobile = useIsMobile();
-
-  const languages = [
-    { name: "Bahasa Indonesia" },
-    { name: "English" },
-    { name: "Español" },
-    { name: "Français" },
-    { name: "Русский" },
-    { name: "العربية" },
-    { name: "中文" },
-    { name: "Português" },
-    { name: "Deutsch" },
-    { name: "日本語" },
-    { name: "हिन्दी" },
-  ];
+  const t = locales[selectedLanguage];
+  const languages = Object.keys(locales);
 
   const handleThemeChange = (theme: 'light' | 'dark') => {
     if (theme === 'dark') {
@@ -328,7 +317,7 @@ export default function PdfConverter() {
 
   const parsePdf = useCallback(async (pdfData: ArrayBuffer, filePassword?: string) => {
     if (!pdfjs) {
-        setError("PDF library is still loading. Please try again in a moment.");
+        setError(t.pdfLibError);
         return;
     }
     
@@ -389,26 +378,26 @@ export default function PdfConverter() {
             setPendingData(bufferCopy);
             setIsPasswordDialogOpen(true);
             if (filePassword) {
-                setError("Password salah. Silakan coba lagi.");
+                setError(t.wrongPasswordError);
             } else {
-                setError("File ini dilindungi password. Silakan masukkan password.");
+                setError(t.passwordProtectedError);
             }
         } else {
             console.error(err);
-            setError("An error occurred while parsing the PDF: " + err.message);
+            setError(t.pdfParseError + err.message);
         }
     } finally {
       setIsLoading(false);
     }
-  }, [pdfjs, parseBankStatement]);
+  }, [pdfjs, parseBankStatement, t]);
 
   const processFile = useCallback((file: File) => {
     if (!pdfjs) {
-      setError("PDF library is still loading. Please try again in a moment.");
+      setError(t.pdfLibError);
       return;
     }
     if (file.type !== "application/pdf") {
-      setError("Please upload a valid PDF file.");
+      setError(t.invalidFileError);
       return;
     }
 
@@ -417,7 +406,7 @@ export default function PdfConverter() {
     const reader = new FileReader();
     reader.onload = async (e) => {
         if (!e.target?.result) {
-            setError("Could not read the file.");
+            setError(t.fileReadError);
             setIsLoading(false);
             return;
         }
@@ -425,11 +414,11 @@ export default function PdfConverter() {
         await parsePdf(fileData);
     };
     reader.onerror = () => {
-        setError("Error reading file.");
+        setError(t.fileReadErrorGeneral);
         setIsLoading(false);
     }
     reader.readAsArrayBuffer(file);
-  }, [pdfjs, parsePdf]);
+  }, [pdfjs, parsePdf, t]);
 
   useEffect(() => {
     if (selectedFile) {
@@ -542,9 +531,9 @@ export default function PdfConverter() {
               {languages.map((language, index) => (
                 <DropdownMenuItem
                   key={index}
-                  onSelect={() => setSelectedLanguage(language.name)}
+                  onSelect={() => setSelectedLanguage(language as keyof typeof locales)}
                 >
-                  {language.name}
+                  {language}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -553,11 +542,11 @@ export default function PdfConverter() {
         <div className="absolute top-4 right-4 flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={() => handleThemeChange('light')}>
                 <Sun className="h-6 w-6 text-muted-foreground" />
-                <span className="sr-only">Light mode</span>
+                <span className="sr-only">{t.themeLight}</span>
             </Button>
             <Button variant="ghost" size="icon" onClick={() => handleThemeChange('dark')}>
                 <Moon className="h-6 w-6 text-muted-foreground" />
-                <span className="sr-only">Dark mode</span>
+                <span className="sr-only">{t.themeDark}</span>
             </Button>
         </div>
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-primary mb-2">
@@ -576,7 +565,7 @@ export default function PdfConverter() {
           Mutex
         </CardTitle>
         <CardDescription>
-          Bank apps only give you PDFs? Mutex turns your Monthly Bank Statements into clean, ready-to-use Excel sheets in seconds
+          {t.appDescription}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 p-6">
@@ -604,8 +593,8 @@ export default function PdfConverter() {
           {isLoading && (
             <div className="flex flex-col items-center justify-center text-primary">
               <Loader2 className="w-12 h-12 animate-spin mb-4" />
-              <p className="font-semibold text-lg">Memproses PDF...</p>
-              <p className="text-muted-foreground">Ini mungkin butuh beberapa saat.</p>
+              <p className="font-semibold text-lg">{t.processingPdf}</p>
+              <p className="text-muted-foreground">{t.processingPleaseWait}</p>
             </div>
           )}
           
@@ -613,10 +602,10 @@ export default function PdfConverter() {
              <div className="text-center flex flex-col items-center">
                 <UploadCloud className="w-16 h-16 text-primary/80 mb-4" />
                 <p className="text-lg font-semibold text-foreground">
-                    Drag & drop file PDF, atau klik untuk memilih
+                    {t.uploadTitle}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                    Semua proses dilakukan di browser Anda, file tidak diupload.
+                    {t.uploadSubtitle}
                 </p>
             </div>
           )}
@@ -625,14 +614,14 @@ export default function PdfConverter() {
             <div className="text-center flex flex-col items-center">
                 <FileCheck2 className="w-16 h-16 text-green-500 mb-4" />
                 <p className="text-lg font-semibold text-foreground">
-                    File Berhasil Diproses!
+                    {t.fileSuccess}
                 </p>
                  <p className="text-sm text-muted-foreground mb-4 px-4 break-all text-center max-w-full">
                     {fileName}
                 </p>
                 <Button variant="outline" size="sm" onClick={handleClearFile}>
                     <XIcon className="mr-2 h-4 w-4"/>
-                    Proses File Lain
+                    {t.processAnotherFile}
                 </Button>
             </div>
           )}
@@ -640,7 +629,7 @@ export default function PdfConverter() {
 
         {error && (
             <Alert variant="destructive">
-                <AlertTitle>Error</AlertTitle>
+                <AlertTitle>{t.errorTitle}</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
             </Alert>
         )}
@@ -651,10 +640,10 @@ export default function PdfConverter() {
               <AccordionTrigger className="hover:no-underline text-left">
                 <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2 min-w-0">
                   <span className="text-base sm:text-lg font-semibold text-foreground">
-                    Teks Mentah dari:
+                    {t.rawTextFrom}
                   </span>
                   <span className="text-sm sm:text-base font-medium italic text-muted-foreground break-all">
-                    {fileName || 'Belum ada file'}
+                    {fileName || t.noFileYet}
                   </span>
                 </div>
               </AccordionTrigger>
@@ -667,7 +656,7 @@ export default function PdfConverter() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-center rounded-md shadow-neumorphic-inset p-8 text-muted-foreground">
-                    <p>Unggah dan proses file PDF untuk melihat teks mentah di sini.</p>
+                    <p>{t.rawTextPlaceholder}</p>
                   </div>
                 )}
               </AccordionContent>
@@ -677,7 +666,7 @@ export default function PdfConverter() {
               <AccordionTrigger className="hover:no-underline text-left">
                 <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2 min-w-0">
                   <h3 className="text-base sm:text-lg font-semibold text-foreground">
-                    Hasil Analisa ({data.length} transaksi ditemukan)
+                    {t.analysisResult} ({data.length} {t.transactionsFound})
                   </h3>
                 </div>
               </AccordionTrigger>
@@ -687,11 +676,11 @@ export default function PdfConverter() {
                       <Table>
                         <TableHeader className="sticky top-0 z-10 bg-card/90 backdrop-blur-sm">
                           <TableRow>
-                            <TableHead className="text-xs rounded-tl-lg whitespace-nowrap">Tanggal</TableHead>
-                            <TableHead className="text-xs">Transaksi</TableHead>
-                            <TableHead className="text-right text-xs whitespace-nowrap">Pemasukan</TableHead>
-                            <TableHead className="text-right text-xs whitespace-nowrap">Pengeluaran</TableHead>
-                            <TableHead className="text-right text-xs rounded-tr-lg whitespace-nowrap">Saldo</TableHead>
+                            <TableHead className="text-xs rounded-tl-lg whitespace-nowrap">{t.tableDate}</TableHead>
+                            <TableHead className="text-xs">{t.tableTransaction}</TableHead>
+                            <TableHead className="text-right text-xs whitespace-nowrap">{t.tableIncome}</TableHead>
+                            <TableHead className="text-right text-xs whitespace-nowrap">{t.tableExpense}</TableHead>
+                            <TableHead className="text-right text-xs rounded-tr-lg whitespace-nowrap">{t.tableBalance}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -723,13 +712,13 @@ export default function PdfConverter() {
                   <div className="flex items-center justify-center rounded-md shadow-neumorphic-inset p-8 text-muted-foreground">
                     {selectedFile && !isLoading ? (
                         <Alert variant="default" className="w-full text-left bg-transparent shadow-none">
-                            <AlertTitle>Tidak ada transaksi yang ditemukan</AlertTitle>
+                            <AlertTitle>{t.noTransactionsFound}</AlertTitle>
                             <AlertDescription>
-                                Aplikasi tidak dapat menemukan transaksi dari teks mentah. Formatnya mungkin tidak didukung.
+                                {t.unsupportedFormat}
                             </AlertDescription>
                         </Alert>
                     ) : (
-                        <p>Tabel hasil konversi akan muncul di sini setelah diproses.</p>
+                        <p>{t.conversionPlaceholder}</p>
                     )}
                   </div>
                 )}
@@ -740,7 +729,7 @@ export default function PdfConverter() {
             <div className="flex justify-center">
               <Button onClick={handleDownload}>
                 <Download className="mr-2 h-4 w-4" />
-                Download Excel
+                {t.downloadExcel}
               </Button>
             </div>
           )}
@@ -749,7 +738,7 @@ export default function PdfConverter() {
 
       <CardFooter className="flex justify-center">
         <p className="text-xs text-muted-foreground text-center max-w-md">
-          Privacy First: Your files are processed in real-time and deleted automatically after conversion. We never store your banking data.
+          {t.privacyFirst}
         </p>
       </CardFooter>
 
@@ -766,7 +755,7 @@ export default function PdfConverter() {
         <DialogContent className="w-[95vw] rounded-lg sm:w-full sm:max-w-[425px]">
           <form onSubmit={handlePasswordSubmit}>
             <DialogHeader>
-              <DialogTitle>Password Diperlukan</DialogTitle>
+              <DialogTitle>{t.passwordRequired}</DialogTitle>
               <DialogDescription>
                 {error}
               </DialogDescription>
@@ -778,7 +767,7 @@ export default function PdfConverter() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Masukkan password..."
+                  placeholder={t.enterPassword}
                   autoFocus
                   className="pr-10"
                 />
@@ -791,14 +780,14 @@ export default function PdfConverter() {
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   <span className="sr-only">
-                    {showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                    {showPassword ? t.hidePassword : t.showPassword}
                   </span>
                 </Button>
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="secondary" className="mt-2 sm:mt-0" onClick={() => setIsPasswordDialogOpen(false)}>Batal</Button>
-              <Button type="submit">Buka</Button>
+              <Button type="button" variant="secondary" className="mt-2 sm:mt-0" onClick={() => setIsPasswordDialogOpen(false)}>{t.cancel}</Button>
+              <Button type="submit">{t.open}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
