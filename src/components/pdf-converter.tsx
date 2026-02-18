@@ -104,6 +104,10 @@ export default function PdfConverter() {
   };
 
   useEffect(() => {
+    document.documentElement.classList.add('dark');
+  }, []);
+
+  useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
@@ -339,13 +343,28 @@ export default function PdfConverter() {
 
         // 1. Find start of transactions and group lines into blocks
         let transactionSectionStarted = false;
+        const headerEndMarker = "DATE & TIME DETAILS NOTES AMOUNT";
+        let headerFound = false;
+
         for (const line of allLines) {
             const trimmedLine = line.trim();
+            if(!headerFound) {
+                if(trimmedLine.startsWith(headerEndMarker)) {
+                    headerFound = true;
+                }
+                continue;
+            }
+
             if (!transactionSectionStarted && jeniusDateRegex.test(trimmedLine)) {
                 transactionSectionStarted = true;
             }
             if (!transactionSectionStarted || !trimmedLine) {
                 continue;
+            }
+            
+            // Stop if we hit the disclaimer
+            if (trimmedLine.startsWith('Disclaimer')) {
+                break;
             }
 
             if (jeniusDateRegex.test(trimmedLine)) {
@@ -377,13 +396,18 @@ export default function PdfConverter() {
                 let descriptionParts: string[] = [];
                 descriptionParts.push(firstLine.replace(date, '').replace(amountMatch[0], '').trim());
 
+                // Process subsequent lines in the block for the description
                 for (let i = 1; i < block.length; i++) {
                     const line = block[i];
+                    // These regexes identify metadata lines to be ignored
                     const txIdRegex = /^\d{8,}[@A-Z\d]*\s+\|/;
                     const timeOnlyRegex = /^\d{2}:\d{2}$/;
                     const isBankChargeNote = /^(January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$/.test(line);
+                    const isCategoryLine = /^[A-Z][a-zA-Z\s&]+$/.test(line) && (line.includes('Transfer') || line.includes('Payment') || line.includes('Charge'));
+                    const isUncategorized = line === 'Uncategorized';
 
-                    if (!line || txIdRegex.test(line) || timeOnlyRegex.test(line) || isBankChargeNote) {
+
+                    if (!line || txIdRegex.test(line) || timeOnlyRegex.test(line) || isBankChargeNote || isCategoryLine || isUncategorized) {
                         continue;
                     }
                     
@@ -406,6 +430,8 @@ export default function PdfConverter() {
                 console.error("Failed to parse Jenius block:", block.join('\n'), e);
             }
         }
+        // Reverse Jenius transactions to show oldest first
+        transactions.reverse();
     }
 
 
