@@ -603,8 +603,8 @@ export default function PdfConverter() {
           <Accordion type="single" collapsible className="w-full" defaultValue="item-2">
             <AccordionItem value="item-1">
               <AccordionTrigger className="hover:no-underline">
-                <h3 className="text-lg font-semibold text-foreground">
-                  Teks Mentah dari: <span className="font-medium italic text-muted-foreground">{fileName || 'Belum ada file'}</span>
+                <h3 className="text-base sm:text-lg font-semibold text-foreground text-left">
+                  Teks Mentah dari: <span className="font-medium italic text-muted-foreground break-all">{fileName || 'Belum ada file'}</span>
                 </h3>
               </AccordionTrigger>
               <AccordionContent>
@@ -624,7 +624,7 @@ export default function PdfConverter() {
          
             <AccordionItem value="item-2">
               <AccordionTrigger className="hover:no-underline">
-                <h3 className="text-lg font-semibold text-foreground">
+                <h3 className="text-base sm:text-lg font-semibold text-foreground text-left">
                   Hasil Analisa ({data.length} transaksi ditemukan)
                 </h3>
               </AccordionTrigger>
