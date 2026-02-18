@@ -637,9 +637,9 @@ export default function PdfConverter() {
               </AccordionTrigger>
               <AccordionContent>
                 {data.length > 0 ? (
-                    <div className="rounded-lg shadow-neumorphic-inset p-2 max-h-[500px] overflow-x-auto overflow-y-auto">
+                    <div className="rounded-lg shadow-neumorphic-inset max-h-[500px] overflow-x-auto overflow-y-auto">
                       <Table>
-                        <TableHeader className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm">
+                        <TableHeader className="sticky top-0 z-10 backdrop-blur-sm">
                           <TableRow>
                             <TableHead className="text-xs">Tanggal</TableHead>
                             <TableHead className="text-xs">Transaksi</TableHead>
@@ -753,4 +753,3 @@ export default function PdfConverter() {
       </Dialog>
     </Card>
   );
-}
