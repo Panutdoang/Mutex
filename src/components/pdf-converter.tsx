@@ -11,8 +11,6 @@ import {
   EyeOff,
   X as XIcon,
   FileCheck2,
-  File as FileIcon,
-  FileSpreadsheet,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -469,7 +467,16 @@ export default function PdfConverter() {
     <Card className="w-full shadow-xl">
       <CardHeader className="text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-primary mb-2">
-          <FileSpreadsheet className="h-7 w-7 text-primary-foreground" />
+          <svg
+            role="img"
+            aria-label="Mutex Logo"
+            className="h-7 w-7 text-primary-foreground"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path d="M2 22V2h5l5 9 5-9h5v20h-5V8l-5 9-5-9v14H2z" />
+          </svg>
         </div>
         <CardTitle className="text-3xl font-bold text-primary">
           Mutex
@@ -599,7 +606,7 @@ export default function PdfConverter() {
                           {data.map((row, index) => (
                             <TableRow key={index}>
                               <TableCell className="font-medium text-xs">{row.Tanggal}</TableCell>
-                              <TableCell className="text-xs">{row.Transaksi}</TableCell>
+                              <TableCell className="text-xs break-words">{row.Transaksi}</TableCell>
                               <TableCell className="text-right font-mono text-xs">
                                 {row.Pemasukan > 0 ? row.Pemasukan.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
@@ -705,3 +712,6 @@ export default function PdfConverter() {
 
     
 
+
+
+    
