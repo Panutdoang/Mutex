@@ -500,27 +500,31 @@ export default function PdfConverter() {
           </div>
         )}
 
-        {!isLoading && rawPdfText && (
-          <Accordion type="single" collapsible className="w-full pt-4">
+        <div className={cn("space-y-6", isLoading ? "hidden" : "block")}>
+          <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="item-1">
               <AccordionTrigger className="hover:no-underline">
                 <h3 className="text-lg font-semibold text-foreground">
-                  Teks Mentah dari: <span className="font-medium italic text-muted-foreground">{fileName}</span>
+                  Teks Mentah dari: <span className="font-medium italic text-muted-foreground">{fileName || 'Belum ada file'}</span>
                 </h3>
               </AccordionTrigger>
               <AccordionContent>
-                <div className="w-full rounded-md border bg-background">
-                  <pre className="p-4 text-sm text-foreground overflow-y-auto max-h-[400px] whitespace-pre-wrap">
-                    <code>{rawPdfText}</code>
-                  </pre>
-                </div>
+                {rawPdfText ? (
+                  <div className="w-full rounded-md border bg-background">
+                    <pre className="p-4 text-sm text-foreground overflow-y-auto max-h-[400px] whitespace-pre-wrap">
+                      <code>{rawPdfText}</code>
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center rounded-md border border-dashed p-8 text-muted-foreground">
+                    <p>Unggah dan proses file PDF untuk melihat teks mentah di sini.</p>
+                  </div>
+                )}
               </AccordionContent>
             </AccordionItem>
           </Accordion>
-        )}
-        
-        {!isLoading && data.length > 0 && (
-          <Accordion type="single" collapsible className="w-full pt-4">
+
+          <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="item-2">
               <AccordionTrigger className="hover:no-underline">
                 <h3 className="text-lg font-semibold text-foreground">
@@ -528,65 +532,69 @@ export default function PdfConverter() {
                 </h3>
               </AccordionTrigger>
               <AccordionContent>
-                <div className="space-y-4 pt-4">
-                  <div className="flex justify-end items-center">
-                    <Button onClick={handleDownload}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Download Excel
-                    </Button>
-                  </div>
-                  <div className="border rounded-lg max-h-[500px] overflow-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-card z-10">
-                        <TableRow>
-                          <TableHead>Tanggal</TableHead>
-                          <TableHead>Deskripsi</TableHead>
-                          <TableHead className="text-right">Debit</TableHead>
-                          <TableHead className="text-right">Kredit</TableHead>
-                          <TableHead className="text-right">Saldo</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data.map((row, index) => (
-                          <TableRow key={index}>
-                            <TableCell className="font-medium whitespace-nowrap">{row.Tanggal}</TableCell>
-                            <TableCell>{row.Deskripsi}</TableCell>
-                            <TableCell className="text-right font-mono">
-                              {row.Debit.toLocaleString("id-ID", {
-                                minimumFractionDigits: 2,
-                              })}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              {row.Kredit.toLocaleString("id-ID", {
-                                minimumFractionDigits: 2,
-                              })}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              {row.Saldo.toLocaleString("id-ID", {
-                                minimumFractionDigits: 2,
-                              })}
-                            </TableCell>
+                {data.length > 0 ? (
+                  <div className="space-y-4 pt-4">
+                    <div className="flex justify-end items-center">
+                      <Button onClick={handleDownload}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Download Excel
+                      </Button>
+                    </div>
+                    <div className="border rounded-lg max-h-[500px] overflow-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-card z-10">
+                          <TableRow>
+                            <TableHead>Tanggal</TableHead>
+                            <TableHead>Deskripsi</TableHead>
+                            <TableHead className="text-right">Debit</TableHead>
+                            <TableHead className="text-right">Kredit</TableHead>
+                            <TableHead className="text-right">Saldo</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {data.map((row, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium whitespace-nowrap">{row.Tanggal}</TableCell>
+                              <TableCell>{row.Deskripsi}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {row.Debit.toLocaleString("id-ID", {
+                                  minimumFractionDigits: 2,
+                                })}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {row.Kredit.toLocaleString("id-ID", {
+                                  minimumFractionDigits: 2,
+                                })}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {row.Saldo.toLocaleString("id-ID", {
+                                  minimumFractionDigits: 2,
+                                })}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center justify-center rounded-md border border-dashed p-8 text-muted-foreground">
+                    {rawPdfText ? (
+                        <Alert variant="destructive" className="w-full text-left">
+                            <AlertTitle>Gagal Mengekstrak Transaksi</AlertTitle>
+                            <AlertDescription>
+                                Aplikasi tidak dapat menemukan transaksi dari teks mentah. Formatnya mungkin tidak didukung.
+                            </AlertDescription>
+                        </Alert>
+                    ) : (
+                        <p>Tabel hasil konversi akan muncul di sini setelah diproses.</p>
+                    )}
+                  </div>
+                )}
               </AccordionContent>
             </AccordionItem>
           </Accordion>
-        )}
-
-        {!isLoading && rawPdfText && data.length === 0 && (
-            <div className="w-full space-y-2 pt-4">
-                <Alert variant="destructive">
-                    <AlertTitle>Gagal Mengekstrak Transaksi</AlertTitle>
-                    <AlertDescription>
-                        Aplikasi tidak dapat menemukan transaksi apa pun. Silakan periksa "Teks Mentah dari PDF" di atas untuk memverifikasi bahwa file Anda terbaca dengan benar. Formatnya mungkin tidak didukung.
-                    </AlertDescription>
-                </Alert>
-            </div>
-        )}
+        </div>
       </CardContent>
 
       <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
