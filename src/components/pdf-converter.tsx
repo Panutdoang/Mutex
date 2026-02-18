@@ -508,14 +508,16 @@ export default function PdfConverter() {
   return (
     <Card className="w-full">
       <CardHeader className="text-center relative">
-        <Button variant="ghost" size="icon" className="absolute top-4 left-4" onClick={() => handleThemeChange('light')}>
-            <Sun className="h-6 w-6 text-muted-foreground" />
-            <span className="sr-only">Light mode</span>
-        </Button>
-        <Button variant="ghost" size="icon" className="absolute top-4 right-4" onClick={() => handleThemeChange('dark')}>
-            <Moon className="h-6 w-6 text-muted-foreground" />
-            <span className="sr-only">Dark mode</span>
-        </Button>
+        <div className="absolute top-4 right-4 flex items-center gap-2">
+            <Button variant="ghost" size="icon" onClick={() => handleThemeChange('light')}>
+                <Sun className="h-6 w-6 text-muted-foreground" />
+                <span className="sr-only">Light mode</span>
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => handleThemeChange('dark')}>
+                <Moon className="h-6 w-6 text-muted-foreground" />
+                <span className="sr-only">Dark mode</span>
+            </Button>
+        </div>
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-primary mb-2">
           <svg
             role="img"
@@ -642,7 +644,7 @@ export default function PdfConverter() {
                     <div className="rounded-lg shadow-neumorphic-inset max-h-[500px] overflow-auto">
                       <Table>
                         <TableHeader className="sticky top-0 z-10 bg-card/90 backdrop-blur-sm">
-                          <TableRow className="border-b-0">
+                          <TableRow>
                             <TableHead className="text-xs rounded-tl-lg whitespace-nowrap">Tanggal</TableHead>
                             <TableHead className="text-xs">Transaksi</TableHead>
                             <TableHead className="text-right text-xs whitespace-nowrap">Pemasukan</TableHead>
@@ -652,7 +654,7 @@ export default function PdfConverter() {
                         </TableHeader>
                         <TableBody>
                           {data.map((row, index) => (
-                            <TableRow key={index} className="border-t">
+                            <TableRow key={index}>
                               <TableCell className="font-medium text-xs select-none whitespace-nowrap">{row.Tanggal}</TableCell>
                               <TableCell className="text-xs select-none">{row.Transaksi}</TableCell>
                               <TableCell className="text-right font-mono text-xs select-none whitespace-nowrap">
