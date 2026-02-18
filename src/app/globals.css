@@ -75,3 +75,11 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+    .overflow-auto::-webkit-scrollbar {
+        display: block;
+    }
+}
+
+    

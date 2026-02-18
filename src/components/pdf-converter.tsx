@@ -35,8 +35,8 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogFooter,
+  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -96,9 +96,8 @@ export default function PdfConverter() {
 
   useEffect(() => {
     const mainContainer = document.querySelector('#main-container');
-    const tableContainer = document.querySelector('#table-container');
     const shouldLockScroll = data.length === 0;
-
+  
     if (shouldLockScroll && !isMobile) {
       document.body.style.overflow = 'hidden';
       if (mainContainer) {
@@ -112,15 +111,7 @@ export default function PdfConverter() {
         mainContainer.classList.add('justify-start');
       }
     }
-    
-    if (tableContainer) {
-        if (isMobile) {
-            tableContainer.classList.add('overflow-auto');
-        } else {
-            tableContainer.classList.remove('overflow-auto');
-        }
-    }
-
+  
     return () => {
       document.body.style.overflow = 'auto';
        if (mainContainer) {
@@ -538,7 +529,7 @@ export default function PdfConverter() {
         <CardTitle className="text-3xl font-bold text-primary">
           Mutex
         </CardTitle>
-        <CardDescription className="text-lg">
+        <CardDescription>
           Bank apps only give you PDFs? Mutex turns your Monthly Bank Statements into clean, ready-to-use Excel sheets in seconds
         </CardDescription>
       </CardHeader>
@@ -646,7 +637,7 @@ export default function PdfConverter() {
               </AccordionTrigger>
               <AccordionContent>
                 {data.length > 0 ? (
-                    <div id="table-container" className="rounded-lg shadow-neumorphic-inset max-h-[500px]">
+                    <div className="rounded-lg shadow-neumorphic-inset max-h-[500px] overflow-auto">
                       <Table>
                         <TableHeader className="sticky top-0 z-10 bg-card/90 backdrop-blur-sm">
                           <TableRow className="border-b-0">
@@ -763,3 +754,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
