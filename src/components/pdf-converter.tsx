@@ -206,62 +206,53 @@ export default function PdfConverter() {
             });
         }
     } else if (isBri) {
-        let transactionLinesStarted = false;
+        let inTransactionSection = false;
         const briDateRegex = /^(\d{2}\/\d{2}\/\d{2})/;
+
         for (const line of allLines) {
             const trimmed = line.trim();
             if (!trimmed) continue;
 
-            if (trimmed.includes('Transaction Date')) {
-                transactionLinesStarted = true;
+            if (trimmed.includes('Transaction Date') && trimmed.includes('Description')) {
+                inTransactionSection = true;
                 continue;
             }
-            if(trimmed.startsWith('Opening Balance')){
-                transactionLinesStarted = false;
-                continue;
+             if (trimmed.startsWith('Opening Balance') || trimmed.startsWith('Saldo Awal')) {
+                inTransactionSection = false;
+                continue; 
             }
 
-            if(transactionLinesStarted && briDateRegex.test(trimmed)){
-                 try {
-                    const parts = trimmed.split(/\s{2,}/);
-                    if (parts.length < 4) continue;
-
+            if (inTransactionSection && briDateRegex.test(trimmed)) {
+                try {
                     const dateMatch = trimmed.match(briDateRegex);
-                    if(!dateMatch) continue;
+                    if (!dateMatch) continue;
                     
-                    const amountPart = parts[parts.length - 1];
-                    const amountMatch = amountPart.match(/([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/);
-                    
-                    if(amountMatch){
-                        const [_, debitStr, creditStr, balanceStr] = amountMatch;
+                    const date = dateMatch[1];
+                    const lineContent = trimmed;
+
+                    const amountRegex = /([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/;
+                    const amountMatch = lineContent.match(amountRegex);
+
+                    if (amountMatch) {
+                        const [fullAmountMatch, debitStr, creditStr, balanceStr] = amountMatch;
                         
-                        let description = parts.slice(1, -1).join(' ').trim();
-                        description = description.replace(/\d{6,}/, '').trim(); // Remove long numbers (like teller id)
+                        let description = lineContent.substring(0, lineContent.indexOf(fullAmountMatch)).trim();
+                        
+                        description = description.replace(briDateRegex, '').trim();
+                        description = description.replace(/^\d{2}:\d{2}:\d{2}\s+/, '').trim();
+                        
+                        // Clean up teller ID from the end of the description
+                        description = description.replace(/\s\d{7,8}$/, '').trim();
 
                         transactions.push({
-                            Tanggal: dateMatch[1],
-                            Transaksi: description,
-                            Pemasukan: parseCurrency(creditStr),
-                            Pengeluaran: parseCurrency(debitStr),
-                            Saldo: parseCurrency(balanceStr),
-                        });
-                    } else { // Handle cases where amount is split
-                         const balanceStr = parts.pop()?.trim() || '0';
-                         const creditStr = parts.pop()?.trim() || '0';
-                         const debitStr = parts.pop()?.trim() || '0';
-                         let description = parts.slice(1).join(' ').trim();
-                         description = description.replace(/\d{6,}/, '').trim(); // Remove long numbers (like teller id)
-
-                         transactions.push({
-                            Tanggal: dateMatch[1],
+                            Tanggal: date,
                             Transaksi: description,
                             Pemasukan: parseCurrency(creditStr),
                             Pengeluaran: parseCurrency(debitStr),
                             Saldo: parseCurrency(balanceStr),
                         });
                     }
-
-                } catch(e) {
+                } catch (e) {
                     console.error("Failed to parse BRI line:", line, e);
                 }
             }
@@ -705,5 +696,7 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
 
     
