@@ -744,7 +744,7 @@ export default function PdfConverter() {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setIsPasswordDialogOpen(false)}>Batal</Button>
+              <Button type="button" variant="secondary" className="mt-2 sm:mt-0" onClick={() => setIsPasswordDialogOpen(false)}>Batal</Button>
               <Button type="submit">Buka</Button>
             </DialogFooter>
           </form>
@@ -754,4 +754,5 @@ export default function PdfConverter() {
   );
 }
 
+    
     
