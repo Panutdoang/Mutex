@@ -40,6 +40,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
 
 interface Transaction {
   Tanggal: string;
@@ -443,20 +446,26 @@ export default function PdfConverter() {
         )}
 
         {!isLoading && rawPdfText && (
-          <div className="w-full space-y-2 pt-4">
-            <h3 className="text-lg font-semibold text-foreground">
-              Teks Mentah dari: <span className="font-medium italic text-muted-foreground">{fileName}</span>
-            </h3>
-            <div className="w-full rounded-md border bg-background">
-              <pre className="p-4 text-sm text-foreground overflow-auto max-h-[400px]">
-                <code>{rawPdfText}</code>
-              </pre>
-            </div>
-          </div>
+          <Accordion type="single" collapsible className="w-full pt-4">
+            <AccordionItem value="item-1">
+              <AccordionTrigger className="hover:no-underline">
+                <h3 className="text-lg font-semibold text-foreground">
+                  Teks Mentah dari: <span className="font-medium italic text-muted-foreground">{fileName}</span>
+                </h3>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="w-full rounded-md border bg-background">
+                  <pre className="p-4 text-sm text-foreground overflow-auto max-h-[400px]">
+                    <code>{rawPdfText}</code>
+                  </pre>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         )}
         
         {!isLoading && data.length > 0 && (
-          <div className="space-y-4">
+          <div className="space-y-4 pt-4">
             <div className="flex justify-between items-center">
                 <h3 className="text-2xl font-semibold text-primary">
                 Hasil Analisa ({data.length} transaksi ditemukan)
@@ -501,6 +510,12 @@ export default function PdfConverter() {
 
         {!isLoading && rawPdfText && data.length === 0 && (
             <div className="w-full space-y-2 pt-4">
+                <Alert variant="destructive">
+                    <AlertTitle>Gagal Mengekstrak Transaksi</AlertTitle>
+                    <AlertDescription>
+                        Aplikasi tidak dapat menemukan transaksi apa pun. Silakan periksa "Teks Mentah dari PDF" di atas untuk memverifikasi bahwa file Anda terbaca dengan benar. Formatnya mungkin tidak didukung.
+                    </AlertDescription>
+                </Alert>
             </div>
         )}
       </CardContent>
@@ -555,5 +570,7 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
 
     
