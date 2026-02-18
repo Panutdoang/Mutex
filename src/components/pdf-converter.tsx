@@ -70,6 +70,8 @@ const PdfPage = ({ pdfDoc, pageNumber }: { pdfDoc: any, pageNumber: number }) =>
     useEffect(() => {
         if (!pdfDoc || !canvasRef.current) return;
 
+        let renderTask: any; // Using 'any' for pdfjs-dist RenderTask type
+
         const renderPage = async () => {
             try {
                 const page = await pdfDoc.getPage(pageNumber);
@@ -81,17 +83,29 @@ const PdfPage = ({ pdfDoc, pageNumber }: { pdfDoc: any, pageNumber: number }) =>
                     canvas.height = viewport.height;
                     canvas.width = viewport.width;
 
-                    await page.render({
+                    renderTask = page.render({
                         canvasContext: context,
                         viewport: viewport,
-                    }).promise;
+                    });
+                    
+                    await renderTask.promise;
                 }
-            } catch (e) {
-                console.error(`Failed to render page ${pageNumber}`, e);
+            } catch (e: any) {
+                // pdf.js throws a "RenderingCancelledException" when a render is cancelled.
+                // We can safely ignore this error.
+                if (e.name !== 'RenderingCancelledException') {
+                    console.error(`Failed to render page ${pageNumber}`, e);
+                }
             }
         };
 
         renderPage();
+
+        return () => {
+            if (renderTask) {
+                renderTask.cancel();
+            }
+        };
     }, [pdfDoc, pageNumber]);
 
     return <canvas ref={canvasRef} className="block mx-auto my-4 shadow-lg" />;
@@ -288,6 +302,7 @@ export default function PdfConverter() {
     setError(null);
     setData([]);
     setRawPdfText(null);
+    setPdfDoc(null);
 
     try {
         const pdfDataForDocument = pdfData.slice(0);
@@ -362,7 +377,7 @@ export default function PdfConverter() {
     }
 
     setFileName(file.name);
-
+    
     const reader = new FileReader();
     reader.onload = async (e) => {
         if (!e.target?.result) {
@@ -553,7 +568,7 @@ export default function PdfConverter() {
             </Alert>
         )}
 
-        <div className={cn("space-y-6", (pdfDoc || rawPdfText) ? 'block' : 'hidden' )}>
+        <div className={"space-y-6"}>
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="item-1">
               <AccordionTrigger className="hover:no-underline">
@@ -564,7 +579,7 @@ export default function PdfConverter() {
               <AccordionContent>
                 {rawPdfText ? (
                   <div className="w-full rounded-md border bg-background">
-                    <pre className="p-4 text-sm text-foreground overflow-y-auto max-h-[400px] whitespace-pre-wrap">
+                    <pre className="p-4 text-sm text-foreground overflow-auto max-h-[400px] whitespace-pre-wrap">
                       <code>{rawPdfText}</code>
                     </pre>
                   </div>
@@ -631,8 +646,8 @@ export default function PdfConverter() {
                 ) : (
                   <div className="flex items-center justify-center rounded-md border border-dashed p-8 text-muted-foreground">
                     {rawPdfText && !isLoading ? (
-                        <Alert variant="destructive" className="w-full text-left">
-                            <AlertTitle>Gagal Mengekstrak Transaksi</AlertTitle>
+                        <Alert variant="default" className="w-full text-left">
+                            <AlertTitle>Tidak ada transaksi yang ditemukan</AlertTitle>
                             <AlertDescription>
                                 Aplikasi tidak dapat menemukan transaksi dari teks mentah. Formatnya mungkin tidak didukung.
                             </AlertDescription>
@@ -649,10 +664,10 @@ export default function PdfConverter() {
       </CardContent>
 
       <Dialog open={isPasswordDialogOpen} onOpenChange={(isOpen) => {
-        setIsPasswordDialogOpen(isOpen);
         if (!isOpen) {
           handleClearFile({ stopPropagation: () => {} } as React.MouseEvent);
         }
+        setIsPasswordDialogOpen(isOpen);
       }}>
         <DialogContent className="sm:max-w-[425px]">
           <form onSubmit={handlePasswordSubmit}>
