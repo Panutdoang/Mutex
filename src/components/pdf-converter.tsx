@@ -92,7 +92,7 @@ export default function PdfConverter() {
   const [rawPdfText, setRawPdfText] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedLanguage, setSelectedLanguage] = useState<keyof typeof locales>("Bahasa Indonesia");
+  const [selectedLanguage, setSelectedLanguage] = useState<keyof typeof locales>("English");
   const isSuccess = useRef(false);
   const isMobile = useIsMobile();
   const t = locales[selectedLanguage];
@@ -109,6 +109,7 @@ export default function PdfConverter() {
   useEffect(() => {
     const mainContainer = document.querySelector('#main-container');
 
+    document.documentElement.classList.add('dark');
     document.body.style.overflow = 'auto';
     if (mainContainer) {
       mainContainer.classList.remove('justify-center');
@@ -781,3 +782,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
