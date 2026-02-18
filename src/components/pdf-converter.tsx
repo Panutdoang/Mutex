@@ -710,7 +710,7 @@ export default function PdfConverter() {
         }
         setIsPasswordDialogOpen(isOpen);
       }}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="w-[95vw] rounded-lg sm:w-full sm:max-w-[425px]">
           <form onSubmit={handlePasswordSubmit}>
             <DialogHeader>
               <DialogTitle>Password Diperlukan</DialogTitle>
