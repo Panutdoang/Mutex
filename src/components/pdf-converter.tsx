@@ -13,6 +13,7 @@ import {
   FileCheck2,
   Sun,
   Moon,
+  Globe,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -84,8 +91,23 @@ export default function PdfConverter() {
   const [rawPdfText, setRawPdfText] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState("Bahasa Indonesia");
   const isSuccess = useRef(false);
   const isMobile = useIsMobile();
+
+  const languages = [
+    { name: "Bahasa Indonesia" },
+    { name: "English" },
+    { name: "Español" },
+    { name: "Français" },
+    { name: "Русский" },
+    { name: "العربية" },
+    { name: "中文" },
+    { name: "Português" },
+    { name: "Deutsch" },
+    { name: "日本語" },
+    { name: "हिन्दी" },
+  ];
 
   const handleThemeChange = (theme: 'light' | 'dark') => {
     if (theme === 'dark') {
@@ -508,6 +530,26 @@ export default function PdfConverter() {
   return (
     <Card className="w-full">
       <CardHeader className="text-center relative">
+        <div className="absolute top-4 left-4">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Globe className="mr-2 h-4 w-4" />
+                <span>{selectedLanguage}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {languages.map((language, index) => (
+                <DropdownMenuItem
+                  key={index}
+                  onSelect={() => setSelectedLanguage(language.name)}
+                >
+                  {language.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
         <div className="absolute top-4 right-4 flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={() => handleThemeChange('light')}>
                 <Sun className="h-6 w-6 text-muted-foreground" />
@@ -641,7 +683,7 @@ export default function PdfConverter() {
               </AccordionTrigger>
               <AccordionContent>
                 {data.length > 0 ? (
-                    <div className="rounded-lg shadow-neumorphic-inset max-h-[500px] overflow-auto">
+                    <div className="rounded-lg shadow-neumorphic-inset overflow-auto max-h-[500px]">
                       <Table>
                         <TableHeader className="sticky top-0 z-10 bg-card/90 backdrop-blur-sm">
                           <TableRow>
