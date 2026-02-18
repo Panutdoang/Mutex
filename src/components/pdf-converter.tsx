@@ -108,31 +108,17 @@ export default function PdfConverter() {
 
   useEffect(() => {
     const mainContainer = document.querySelector('#main-container');
-    const shouldLockScroll = data.length === 0;
-  
-    if (shouldLockScroll && !isMobile) {
-      document.body.style.overflow = 'hidden';
-      if (mainContainer) {
-        mainContainer.classList.remove('justify-start');
-        mainContainer.classList.add('justify-center');
-      }
-    } else {
-      // We let the table container handle the scroll, not the body
-      document.body.style.overflow = 'auto';
-      if (mainContainer) {
-        mainContainer.classList.remove('justify-center');
-        mainContainer.classList.add('justify-start');
-      }
+
+    document.body.style.overflow = 'auto';
+    if (mainContainer) {
+      mainContainer.classList.remove('justify-center');
+      mainContainer.classList.add('justify-start');
     }
-  
+
     return () => {
       document.body.style.overflow = 'auto';
-       if (mainContainer) {
-        mainContainer.classList.remove('justify-center');
-        mainContainer.classList.add('justify-start');
-      }
     };
-  }, [data.length, isMobile]);
+  }, []);
 
 
   useEffect(() => {
@@ -635,7 +621,7 @@ export default function PdfConverter() {
         )}
 
         <div className={"space-y-6"}>
-          <Accordion type="single" collapsible className="w-full" defaultValue={data.length > 0 ? "item-2" : undefined}>
+          <Accordion type="single" collapsible className="w-full" defaultValue={"item-2"}>
             <AccordionItem value="item-1">
               <AccordionTrigger className="hover:no-underline text-left">
                 <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2 min-w-0">
@@ -726,7 +712,7 @@ export default function PdfConverter() {
             </AccordionItem>
           </Accordion>
           {data.length > 0 && (
-            <div className="flex justify-center">
+            <div className="flex justify-center mt-6">
               <Button onClick={handleDownload}>
                 <Download className="mr-2 h-4 w-4" />
                 {t.downloadExcel}
