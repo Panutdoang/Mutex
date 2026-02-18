@@ -637,22 +637,22 @@ export default function PdfConverter() {
               </AccordionTrigger>
               <AccordionContent>
                 {data.length > 0 ? (
-                    <div className="rounded-lg shadow-neumorphic-inset max-h-[500px] overflow-x-auto overflow-y-auto">
+                    <div className="rounded-lg shadow-neumorphic-inset max-h-[500px] md:overflow-y-auto md:overflow-x-hidden overflow-x-auto overflow-y-auto">
                       <Table>
                         <TableHeader className="sticky top-0 z-10 backdrop-blur-sm">
-                          <TableRow>
-                            <TableHead className="text-xs">Tanggal</TableHead>
+                          <TableRow className="border-b-0">
+                            <TableHead className="text-xs rounded-tl-lg">Tanggal</TableHead>
                             <TableHead className="text-xs">Transaksi</TableHead>
                             <TableHead className="text-right text-xs">Pemasukan</TableHead>
                             <TableHead className="text-right text-xs">Pengeluaran</TableHead>
-                            <TableHead className="text-right text-xs">Saldo</TableHead>
+                            <TableHead className="text-right text-xs rounded-tr-lg">Saldo</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {data.map((row, index) => (
-                            <TableRow key={index}>
+                            <TableRow key={index} className="border-t">
                               <TableCell className="font-medium text-xs select-none">{row.Tanggal}</TableCell>
-                              <TableCell className="text-xs select-none whitespace-nowrap md:whitespace-normal">{row.Transaksi}</TableCell>
+                              <TableCell className="text-xs select-none md:whitespace-normal whitespace-nowrap">{row.Transaksi}</TableCell>
                               <TableCell className="text-right font-mono text-xs select-none">
                                 {row.Pemasukan > 0 ? row.Pemasukan.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
@@ -753,3 +753,5 @@ export default function PdfConverter() {
       </Dialog>
     </Card>
   );
+
+    
