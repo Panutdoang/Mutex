@@ -281,8 +281,7 @@ export default function PdfConverter() {
 
         for (let i = 0; i < allLines.length; i++) {
             if (allLines[i].includes(startMarker) || allLines[i].includes("Uraian Transaksi")) {
-                startIndex = i + 1;
-                break;
+                if(startIndex === -1) startIndex = i + 1;
             }
         }
         
@@ -302,35 +301,25 @@ export default function PdfConverter() {
 
         const relevantLines = endIndex === -1 ? allLines.slice(startIndex) : allLines.slice(startIndex, endIndex);
 
-        let transactionLines: string[] = [];
-        for (const line of relevantLines) {
-            const trimmedLine = line.trim();
-            const pageNumRegex = /^(Halaman|Page)\s+\d+\s+dari\s+\d+$/;
-            const isNoise = pageNumRegex.test(trimmedLine) ||
-                            line.includes('STATEMENT OF FINANCIAL TRANSACTION') ||
-                            line.includes('LAPORAN TRANSAKSI FINANSIAL') ||
-                            line.includes('Tanggal Transaksi Uraian Transaksi');
-            
-            if (trimmedLine && !isNoise) {
-                transactionLines.push(line);
-            }
-        }
-        
         let blocks: string[][] = [];
         let currentBlock: string[] = [];
-        for (const line of transactionLines) {
-            if (briDateRegex.test(line.trim())) {
-                if (currentBlock.length > 0) {
-                    blocks.push(currentBlock);
-                }
+        const headerNoiseRegex = /Tanggal Transaksi Uraian Transaksi|Transaction Date Transaction Description|Halaman \d+ dari \d+|Page \d+ of \d+/;
+        const footerNoiseRegex = /IBIZ_/;
+        
+        for (const line of relevantLines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine || headerNoiseRegex.test(line) || footerNoiseRegex.test(line)) {
+                continue;
+            }
+            
+            if (briDateRegex.test(trimmedLine)) {
+                if (currentBlock.length > 0) blocks.push(currentBlock);
                 currentBlock = [line];
             } else if (currentBlock.length > 0) {
                 currentBlock.push(line);
             }
         }
-        if (currentBlock.length > 0) {
-            blocks.push(currentBlock);
-        }
+        if (currentBlock.length > 0) blocks.push(currentBlock);
         
         for (const block of blocks) {
             try {
@@ -340,21 +329,27 @@ export default function PdfConverter() {
 
                 const date = dateMatch[1];
                 
-                const amountRegex = /(\d[\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/;
+                const amountRegex = /([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/;
                 const mainAmountMatch = combinedText.match(amountRegex);
 
                 if (mainAmountMatch) {
                     const [fullMatch, debitStr, creditStr, balanceStr] = mainAmountMatch;
-
-                    const description = combinedText
-                        .replace(fullMatch, ' ')
-                        .replace(dateMatch[0], ' ')
-                        .replace(/^\d{2}:\d{2}:\d{2}\s*/, ' ')
-                        .replace(/\s+/g, ' ')
-                        .trim();
                     
-                    let finalDescription = description.replace(/BANK NEGARA INDONESIA - PT\s+\(PERSERO\s+-\s+(.*?)\)/, 'BANK BNI ($1)');
+                    let description = combinedText;
+                    description = description.replace(fullMatch, ' ');
+                    description = description.replace(dateMatch[0], ' ');
+                    
+                    const timeMatch = description.match(/\d{2}:\d{2}:\d{2}/);
+                    if (timeMatch) {
+                        description = description.replace(timeMatch[0], ' ').trim();
+                    }
+                    
+                    description = description.replace(/\s\d{7}\s/, ' ');
+                    description = description.replace(/\s+/g, ' ').trim();
+
+                    let finalDescription = description.replace(/BANK NEGARA INDONESIA - PT\s+\(PERSERO\s+-\s+([^)]+)\)/, 'BANK BNI ($1)');
                     finalDescription = finalDescription.replace(/BANK NEGARA INDONESIA - PT/, 'BANK BNI');
+                    finalDescription = finalDescription.replace(/BANK MANDIRI \(PERSERO\), PT\s+-\s+([^\s]+)\s+-\s+([^)]+)/, 'BANK MANDIRI ($1 - $2)');
 
                     transactions.push({
                         Tanggal: date,
@@ -952,3 +947,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
