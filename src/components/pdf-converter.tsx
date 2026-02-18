@@ -11,6 +11,8 @@ import {
   EyeOff,
   X as XIcon,
   FileCheck2,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -81,6 +83,14 @@ export default function PdfConverter() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const isSuccess = useRef(false);
+
+  const handleThemeChange = (theme: 'light' | 'dark') => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
 
   useEffect(() => {
     const mainContainer = document.querySelector('#main-container');
@@ -491,7 +501,15 @@ export default function PdfConverter() {
 
   return (
     <Card className="w-full">
-      <CardHeader className="text-center">
+      <CardHeader className="text-center relative">
+        <Button variant="ghost" size="icon" className="absolute top-4 left-4" onClick={() => handleThemeChange('light')}>
+            <Sun className="h-6 w-6 text-muted-foreground" />
+            <span className="sr-only">Light mode</span>
+        </Button>
+        <Button variant="ghost" size="icon" className="absolute top-4 right-4" onClick={() => handleThemeChange('dark')}>
+            <Moon className="h-6 w-6 text-muted-foreground" />
+            <span className="sr-only">Dark mode</span>
+        </Button>
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-primary mb-2">
           <svg
             role="img"
@@ -731,6 +749,8 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
 
     
 
