@@ -9,6 +9,9 @@ import {
   Download,
   Eye,
   EyeOff,
+  FileText,
+  Play,
+  X as XIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -74,6 +77,7 @@ export default function PdfConverter() {
   const [pendingData, setPendingData] = useState<ArrayBuffer | null>(null);
   const [rawPdfText, setRawPdfText] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   useEffect(() => {
     const loadPdfJs = async () => {
@@ -196,8 +200,8 @@ export default function PdfConverter() {
     setRawPdfText(null);
 
     try {
-        const pdfDataCopy = pdfData.slice(0);
-        const typedArray = new Uint8Array(pdfDataCopy);
+        const pdfDataForDocument = pdfData.slice(0);
+        const typedArray = new Uint8Array(pdfDataForDocument);
         const pdf = await pdfjs.getDocument({ data: typedArray, password: filePassword }).promise;
 
         let fullText = "";
@@ -241,8 +245,7 @@ export default function PdfConverter() {
     } catch (err: any) {
         setIsLoading(false);
         if (err.name === 'PasswordException') {
-            const pdfDataForPassword = pdfData.slice(0);
-            setPendingData(pdfDataForPassword);
+            setPendingData(pdfData);
             setIsPasswordDialogOpen(true);
             if (filePassword) {
                 setError("Password salah. Silakan coba lagi.");
@@ -320,14 +323,25 @@ export default function PdfConverter() {
     setIsDragging(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFile(e.dataTransfer.files[0]);
+      const file = e.dataTransfer.files[0];
+      setSelectedFile(file);
+      setFileName(file.name);
+      setData([]);
+      setRawPdfText(null);
+      setError(null);
+      if(fileInputRef.current) fileInputRef.current.value = "";
       e.dataTransfer.clearData();
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      processFile(e.target.files[0]);
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      setFileName(file.name);
+      setData([]);
+      setRawPdfText(null);
+      setError(null);
     }
   };
 
@@ -336,11 +350,13 @@ export default function PdfConverter() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Mutasi");
     
-    const cols = Object.keys(data[0]);
-    const colWidths = cols.map(col => ({
-      wch: Math.max(...data.map(row => row[col as keyof Transaction]?.toString().length ?? 0), col.length)
-    }));
-    worksheet["!cols"] = colWidths;
+    if (data.length > 0) {
+        const cols = Object.keys(data[0]);
+        const colWidths = cols.map(col => ({
+          wch: Math.max(...data.map(row => row[col as keyof Transaction]?.toString().length ?? 0), col.length)
+        }));
+        worksheet["!cols"] = colWidths;
+    }
 
     XLSX.writeFile(workbook, "Mutex_Report.xlsx");
   };
@@ -358,16 +374,17 @@ export default function PdfConverter() {
       <CardContent className="space-y-6 p-6">
         <div
           className={cn(
-            "relative flex flex-col items-center justify-center w-full p-12 border-2 border-dashed rounded-lg cursor-pointer transition-colors duration-200",
+            "relative flex flex-col items-center justify-center w-full p-12 border-2 border-dashed rounded-lg transition-colors duration-200",
             isDragging
               ? "border-primary bg-primary/10"
-              : "border-border hover:border-primary/50 hover:bg-accent/50"
+              : "border-border hover:border-primary/50 hover:bg-accent/50",
+            selectedFile ? "cursor-default" : "cursor-pointer"
           )}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => !selectedFile && !isLoading && fileInputRef.current?.click()}
         >
           <input
             ref={fileInputRef}
@@ -377,14 +394,45 @@ export default function PdfConverter() {
             onChange={handleFileSelect}
             disabled={!pdfjs || isLoading}
           />
-          <UploadCloud className="w-16 h-16 text-primary/80 mb-4" />
-          <p className="text-lg font-semibold text-foreground">
-            Drag & drop file PDF, atau klik untuk memilih
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Semua proses dilakukan di browser Anda, file tidak diupload.
-          </p>
+          {!selectedFile ? (
+            <>
+                <UploadCloud className="w-16 h-16 text-primary/80 mb-4" />
+                <p className="text-lg font-semibold text-foreground">
+                    Drag & drop file PDF, atau klik untuk memilih
+                </p>
+                <p className="text-sm text-muted-foreground">
+                    Semua proses dilakukan di browser Anda, file tidak diupload.
+                </p>
+            </>
+          ) : (
+             <div className="text-center flex flex-col items-center">
+                <FileText className="w-16 h-16 text-primary/80 mb-4" />
+                <p className="text-lg font-semibold text-foreground">{fileName}</p>
+                {selectedFile.size > 0 && <p className="text-sm text-muted-foreground">{Math.round(selectedFile.size / 1024)} KB</p>}
+                <Button variant="ghost" size="sm" className="mt-4 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedFile(null);
+                    setFileName(null);
+                    setData([]);
+                    setRawPdfText(null);
+                    setError(null);
+                    if(fileInputRef.current) fileInputRef.current.value = "";
+                }}>
+                    <XIcon className="mr-2 h-4 w-4"/>
+                    Hapus File
+                </Button>
+            </div>
+          )}
         </div>
+
+        {!isLoading && selectedFile && (
+            <div className="flex justify-center">
+                <Button onClick={() => processFile(selectedFile)} disabled={!pdfjs} size="lg">
+                    <Play className="mr-2 h-4 w-4" />
+                    Convert
+                </Button>
+            </div>
+        )}
 
         {isLoading && (
           <div className="flex flex-col items-center justify-center p-8 text-primary">
@@ -496,6 +544,8 @@ export default function PdfConverter() {
                 setIsPasswordDialogOpen(false);
                 setError(null);
                 setIsLoading(false);
+                setSelectedFile(null);
+                setFileName(null);
               }}>Batal</Button>
               <Button type="submit">Buka</Button>
             </DialogFooter>
@@ -505,3 +555,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
