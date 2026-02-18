@@ -600,7 +600,7 @@ export default function PdfConverter() {
         )}
 
         <div className={"space-y-6"}>
-          <Accordion type="single" collapsible className="w-full" defaultValue={data.length > 0 || rawPdfText ? "item-2" : undefined}>
+          <Accordion type="single" collapsible className="w-full" defaultValue={data.length > 0 ? "item-2" : undefined}>
             <AccordionItem value="item-1">
               <AccordionTrigger className="hover:no-underline text-left">
                 <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2 min-w-0">
@@ -629,19 +629,14 @@ export default function PdfConverter() {
          
             <AccordionItem value="item-2">
               <AccordionTrigger className="hover:no-underline text-left">
-                <h3 className="text-base sm:text-lg font-semibold text-foreground">
-                  Hasil Analisa ({data.length} transaksi ditemukan)
-                </h3>
+                <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2 min-w-0">
+                  <h3 className="text-base sm:text-lg font-semibold text-foreground">
+                    Hasil Analisa ({data.length} transaksi ditemukan)
+                  </h3>
+                </div>
               </AccordionTrigger>
               <AccordionContent>
                 {data.length > 0 ? (
-                  <div className="space-y-4 pt-4">
-                    <div className="flex items-center">
-                      <Button onClick={handleDownload} className="w-full">
-                        <Download className="mr-2 h-4 w-4" />
-                        Download Excel
-                      </Button>
-                    </div>
                     <div className="rounded-lg shadow-neumorphic-inset p-2 max-h-[500px] overflow-x-auto overflow-y-auto">
                       <Table>
                         <TableHeader className="sticky top-0 bg-card z-10">
@@ -678,13 +673,6 @@ export default function PdfConverter() {
                         </TableBody>
                       </Table>
                     </div>
-                    <div className="flex items-center">
-                      <Button onClick={handleDownload} className="w-full">
-                        <Download className="mr-2 h-4 w-4" />
-                        Download Excel
-                      </Button>
-                    </div>
-                  </div>
                 ) : (
                   <div className="flex items-center justify-center rounded-md shadow-neumorphic-inset p-8 text-muted-foreground">
                     {selectedFile && !isLoading ? (
@@ -702,6 +690,14 @@ export default function PdfConverter() {
               </AccordionContent>
             </AccordionItem>
           </Accordion>
+          {data.length > 0 && (
+            <div className="flex justify-center">
+              <Button onClick={handleDownload}>
+                <Download className="mr-2 h-4 w-4" />
+                Download Excel
+              </Button>
+            </div>
+          )}
         </div>
       </CardContent>
 
@@ -758,7 +754,3 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
-
-    
