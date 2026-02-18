@@ -272,81 +272,85 @@ export default function PdfConverter() {
         }
     } else if (isBri) {
         const briDateRegex = /^(\d{2}\/\d{2}\/\d{2})/;
-        let blocks: string[][] = [];
-        let currentBlock: string[] = [];
+        
+        const startMarkers = [
+            "Transaction Date Transaction Description",
+            "Tanggal Transaksi Uraian Transaksi"
+        ];
+        const endMarkers = ["Saldo Awal", "Opening Balance"];
 
-        let transactionSectionStarted = false;
-        const headerEndMarkers = ['Transaction Date Description Debit Credit Mutasi Kredit Balance', 'Transaction Date Description Debit Credit Balance', 'Description Debit Credit Balance'];
-        const footerStartMarkers = ['IBIZ_', 'Opening Balance', 'Saldo Awal', 'Closing Balance', 'Saldo Akhir'];
+        let transactionLines: string[] = [];
+        let inTransactionSection = false;
 
         for (const line of allLines) {
+            if (!inTransactionSection) {
+                if (startMarkers.some(marker => line.includes(marker))) {
+                    inTransactionSection = true;
+                }
+                continue;
+            }
+
+            if (endMarkers.some(marker => line.trim().startsWith(marker))) {
+                inTransactionSection = false;
+                break;
+            }
+            
             const trimmedLine = line.trim();
-
-            if (headerEndMarkers.some(h => line.includes(h))) {
-                transactionSectionStarted = true;
-                continue;
-            }
-            
-            if (footerStartMarkers.some(f => trimmedLine.startsWith(f))) {
-                transactionSectionStarted = false;
-                continue;
-            }
-            
-            if (trimmedLine.startsWith('LAPORAN TRANSAKSI FINANSIAL')) {
-                transactionSectionStarted = false;
-                if(currentBlock.length > 0) blocks.push(currentBlock);
-                currentBlock = [];
-                continue;
-            }
-
-            if (!transactionSectionStarted || !trimmedLine) continue;
-
-            if (/^(Halaman|Page)\s+\d+\s+dari\s+\d+$/.test(trimmedLine) || trimmedLine.startsWith("STATEMENT OF FINANCIAL TRANSACTION")) {
-                continue;
-            }
-
-            if (briDateRegex.test(trimmedLine)) {
-                if (currentBlock.length > 0) blocks.push(currentBlock);
-                currentBlock = [trimmedLine];
-            } else if (currentBlock.length > 0) {
-                currentBlock.push(trimmedLine);
+            const pageNumRegex = /^(Halaman|Page)\s+\d+\s+dari\s+\d+$/;
+            if (trimmedLine && !pageNumRegex.test(trimmedLine) && !line.includes('STATEMENT OF FINANCIAL TRANSACTION') && !line.includes('LAPORAN TRANSAKSI FINANSIAL')) {
+                transactionLines.push(line);
             }
         }
-        if (currentBlock.length > 0) blocks.push(currentBlock);
-
+        
+        let blocks: string[][] = [];
+        let currentBlock: string[] = [];
+        for (const line of transactionLines) {
+            if (briDateRegex.test(line.trim())) {
+                if (currentBlock.length > 0) {
+                    blocks.push(currentBlock);
+                }
+                currentBlock = [line];
+            } else if (currentBlock.length > 0) {
+                currentBlock.push(line);
+            }
+        }
+        if (currentBlock.length > 0) {
+            blocks.push(currentBlock);
+        }
+        
         for (const block of blocks) {
             try {
-                let combinedText = block.join(' ');
+                let combinedText = block.join(' ').replace(/\s\s+/g, ' ');
                 const dateMatch = combinedText.match(briDateRegex);
                 if (!dateMatch) continue;
-                
+
                 const date = dateMatch[1];
                 
-                const amountRegex = /(\d[\d.,]*)\s+(\d[\d.,]*)\s+([\d.,]*)$/;
-                const amountMatch = combinedText.match(amountRegex);
+                const amountRegex = /(\d[\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/;
+                const mainAmountMatch = combinedText.match(amountRegex);
 
-                if (amountMatch) {
-                    const [fullAmountMatch, debitStr, creditStr, balanceStr] = amountMatch;
-                    
-                    let description = combinedText.substring(0, combinedText.lastIndexOf(fullAmountMatch)).trim();
-                    
-                    description = description.replace(briDateRegex, '').trim();
-                    description = description.replace(/^\d{2}:\d{2}:\d{2}\s+/, '').trim();
-                    description = description.replace(/\s+\d{6,8}$/, '');
+                if (mainAmountMatch) {
+                    const [fullMatch, debitStr, creditStr, balanceStr] = mainAmountMatch;
 
-                    description = description.replace(/BANK NEGARA INDONESIA - PT\s+\d+\s+\(PERSERO - (.*?)\)/, 'BANK BNI ($1)');
-                    description = description.replace(/BANK NEGARA INDONESIA - PT/, 'BANK BNI');
-                    description = description.replace(/\s+/g, ' ').trim();
+                    const description = combinedText
+                        .replace(fullMatch, ' ')
+                        .replace(dateMatch[0], ' ')
+                        .replace(/^\d{2}:\d{2}:\d{2}\s*/, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    
+                    let finalDescription = description.replace(/BANK NEGARA INDONESIA - PT\s+\(PERSERO\s+-\s+(.*?)\)/, 'BANK BNI ($1)');
+                    finalDescription = finalDescription.replace(/BANK NEGARA INDONESIA - PT/, 'BANK BNI');
 
                     transactions.push({
                         Tanggal: date,
-                        Transaksi: description,
+                        Transaksi: finalDescription,
                         Pemasukan: parseCurrency(creditStr),
                         Pengeluaran: parseCurrency(debitStr),
                         Saldo: parseCurrency(balanceStr),
                     });
                 }
-            } catch (e) {
+            } catch(e) {
                 console.error("Failed to parse BRI block:", block.join('\n'), e);
             }
         }
@@ -355,23 +359,18 @@ export default function PdfConverter() {
         let blocks: string[][] = [];
         let currentBlock: string[] = [];
 
-        let transactionSectionStarted = false;
-        const headerEndMarker = "DATE & TIME DETAILS NOTES AMOUNT";
         let headerFound = false;
 
         for (const line of allLines) {
             const trimmedLine = line.trim();
             if(!headerFound) {
-                if(trimmedLine.startsWith(headerEndMarker)) {
+                if(trimmedLine.startsWith("DATE & TIME DETAILS NOTES AMOUNT")) {
                     headerFound = true;
                 }
                 continue;
             }
 
-            if (!transactionSectionStarted && jeniusDateRegex.test(trimmedLine)) {
-                transactionSectionStarted = true;
-            }
-            if (!transactionSectionStarted || !trimmedLine) {
+            if (!trimmedLine) {
                 continue;
             }
             
@@ -939,3 +938,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
