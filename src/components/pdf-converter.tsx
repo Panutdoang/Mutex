@@ -11,7 +11,6 @@ import {
   EyeOff,
   X as XIcon,
   FileCheck2,
-  FileSpreadsheet,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -82,6 +81,32 @@ export default function PdfConverter() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const isSuccess = useRef(false);
+
+  useEffect(() => {
+    const mainContainer = document.querySelector('#main-container');
+
+    if (data.length > 0) {
+      document.body.style.overflow = 'auto';
+      if (mainContainer) {
+        mainContainer.classList.remove('justify-center');
+        mainContainer.classList.add('justify-start');
+      }
+    } else {
+      document.body.style.overflow = 'hidden';
+      if (mainContainer) {
+        mainContainer.classList.remove('justify-start');
+        mainContainer.classList.add('justify-center');
+      }
+    }
+
+    return () => {
+      document.body.style.overflow = 'auto';
+       if (mainContainer) {
+        mainContainer.classList.remove('justify-center');
+        mainContainer.classList.add('justify-start');
+      }
+    };
+  }, [data]);
 
 
   useEffect(() => {
