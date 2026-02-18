@@ -581,7 +581,7 @@ export default function PdfConverter() {
                 <p className="text-lg font-semibold text-foreground">
                     File Berhasil Diproses!
                 </p>
-                 <p className="text-sm text-muted-foreground mb-4 px-4 break-words text-center max-w-full">
+                 <p className="text-sm text-muted-foreground mb-4 px-4 break-all text-center max-w-full">
                     {fileName}
                 </p>
                 <Button variant="outline" size="sm" onClick={handleClearFile}>
@@ -754,5 +754,4 @@ export default function PdfConverter() {
   );
 }
 
-    
     
