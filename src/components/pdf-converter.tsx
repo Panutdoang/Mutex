@@ -602,10 +602,15 @@ export default function PdfConverter() {
         <div className={"space-y-6"}>
           <Accordion type="single" collapsible className="w-full" defaultValue="item-2">
             <AccordionItem value="item-1">
-              <AccordionTrigger className="hover:no-underline">
-                <h3 className="text-base sm:text-lg font-semibold text-foreground text-left">
-                  Teks Mentah dari: <span className="font-medium italic text-muted-foreground break-all">{fileName || 'Belum ada file'}</span>
-                </h3>
+              <AccordionTrigger className="hover:no-underline text-left">
+                <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+                  <span className="text-base sm:text-lg font-semibold text-foreground">
+                    Teks Mentah dari:
+                  </span>
+                  <span className="text-sm sm:text-base font-medium italic text-muted-foreground break-all">
+                    {fileName || 'Belum ada file'}
+                  </span>
+                </div>
               </AccordionTrigger>
               <AccordionContent>
                 {rawPdfText ? (
