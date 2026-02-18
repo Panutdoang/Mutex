@@ -319,7 +319,12 @@ export default function PdfConverter() {
     setPdfDoc(null);
 
     try {
-        const typedArray = new Uint8Array(pdfData);
+        // The getDocument method can transfer the ArrayBuffer to a worker thread,
+        // which detaches it. If the PDF is password protected, we'll need the
+        // buffer again. So, we pass a copy to getDocument, and keep the original
+        // in case we need to retry with a password.
+        const pdfDataCopy = pdfData.slice(0);
+        const typedArray = new Uint8Array(pdfDataCopy);
         const pdf = await pdfjs.getDocument({ data: typedArray, password: filePassword }).promise;
         setPdfDoc(pdf);
 
@@ -363,7 +368,8 @@ export default function PdfConverter() {
 
     } catch (err: any) {
         if (err.name === 'PasswordException') {
-            setPendingData(pdfData.slice(0)); // Create a copy of the buffer
+            // The original pdfData is still attached because we passed a copy to pdf.js
+            setPendingData(pdfData);
             setIsPasswordDialogOpen(true);
             if (filePassword) {
                 setError("Password salah. Silakan coba lagi.");
