@@ -10,6 +10,7 @@ import {
   Eye,
   EyeOff,
   X as XIcon,
+  FileCheck2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -64,53 +65,6 @@ const parseCurrency = (value: string): number => {
     return parseFloat(value.replace(/,/g, ''));
 };
 
-const PdfPage = ({ pdfDoc, pageNumber }: { pdfDoc: any, pageNumber: number }) => {
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-    useEffect(() => {
-        if (!pdfDoc || !canvasRef.current) return;
-
-        let renderTask: any; // Using 'any' for pdfjs-dist RenderTask type
-
-        const renderPage = async () => {
-            try {
-                const page = await pdfDoc.getPage(pageNumber);
-                const viewport = page.getViewport({ scale: 1.5 });
-                const canvas = canvasRef.current!;
-                const context = canvas.getContext('2d');
-
-                if (context) {
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-
-                    renderTask = page.render({
-                        canvasContext: context,
-                        viewport: viewport,
-                    });
-                    
-                    await renderTask.promise;
-                }
-            } catch (e: any) {
-                // pdf.js throws a "RenderingCancelledException" when a render is cancelled.
-                // We can safely ignore this error.
-                if (e.name !== 'RenderingCancelledException') {
-                    console.error(`Failed to render page ${pageNumber}`, e);
-                }
-            }
-        };
-
-        renderPage();
-
-        return () => {
-            if (renderTask) {
-                renderTask.cancel();
-            }
-        };
-    }, [pdfDoc, pageNumber]);
-
-    return <canvas ref={canvasRef} className="block mx-auto my-4 shadow-lg" />;
-};
-
 
 export default function PdfConverter() {
   const [isDragging, setIsDragging] = useState(false);
@@ -126,7 +80,6 @@ export default function PdfConverter() {
   const [rawPdfText, setRawPdfText] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [pdfDoc, setPdfDoc] = useState<any>(null);
   const isSuccess = useRef(false);
 
 
@@ -314,17 +267,12 @@ export default function PdfConverter() {
     setError(null);
     setData([]);
     setRawPdfText(null);
-    if(pdfDoc) {
-      pdfDoc.destroy();
-    }
-    setPdfDoc(null);
-
+    
     const originalPdfData = pdfData.slice(0); // Make a copy before trying to use it
 
     try {
         const typedArray = new Uint8Array(pdfData);
         const pdf = await pdfjs.getDocument({ data: typedArray, password: filePassword }).promise;
-        setPdfDoc(pdf);
         isSuccess.current = true; // Set success flag
 
         let fullText = "";
@@ -368,7 +316,6 @@ export default function PdfConverter() {
     } catch (err: any) {
         if (err.name === 'PasswordException') {
             isSuccess.current = false;
-            // The original pdfData was detached. Use the copy we made.
             setPendingData(originalPdfData);
             setIsPasswordDialogOpen(true);
             if (filePassword) {
@@ -383,7 +330,7 @@ export default function PdfConverter() {
     } finally {
       setIsLoading(false);
     }
-  }, [pdfjs, parseBankStatement, pdfDoc]);
+  }, [pdfjs, parseBankStatement]);
 
   const processFile = useCallback((file: File) => {
     if (!pdfjs) {
@@ -472,10 +419,6 @@ export default function PdfConverter() {
       setData([]);
       setRawPdfText(null);
       setError(null);
-      if (pdfDoc) {
-        pdfDoc.destroy();
-      }
-      setPdfDoc(null);
       setIsLoading(false);
       setPendingData(null);
       setIsPasswordDialogOpen(false);
@@ -526,18 +469,17 @@ export default function PdfConverter() {
       <CardContent className="space-y-6 p-6">
         <div
           className={cn(
-            "relative flex flex-col items-center justify-center w-full min-h-[200px] border-2 border-dashed rounded-lg transition-colors duration-200",
+            "relative flex flex-col items-center justify-center w-full min-h-[200px] p-12 border-2 border-dashed rounded-lg transition-colors duration-200",
             isDragging
               ? "border-primary bg-primary/10"
-              : "border-border hover:border-primary/50",
-            pdfDoc || isLoading ? "" : "hover:bg-accent/50 cursor-pointer",
-            pdfDoc && !isLoading ? "p-0 border-solid" : "p-12",
+              : "border-border",
+            !selectedFile && !isLoading && "hover:border-primary/50 hover:bg-accent/50 cursor-pointer"
           )}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          onClick={() => !pdfDoc && !isLoading && fileInputRef.current?.click()}
+          onClick={() => !selectedFile && !isLoading && fileInputRef.current?.click()}
         >
           <input
             ref={fileInputRef}
@@ -556,7 +498,7 @@ export default function PdfConverter() {
             </div>
           )}
           
-          {!isLoading && !pdfDoc && (
+          {!isLoading && !selectedFile && (
              <div className="text-center flex flex-col items-center">
                 <UploadCloud className="w-16 h-16 text-primary/80 mb-4" />
                 <p className="text-lg font-semibold text-foreground">
@@ -568,17 +510,19 @@ export default function PdfConverter() {
             </div>
           )}
 
-          {!isLoading && pdfDoc && (
-            <div className="relative w-full h-full">
-                <Button variant="destructive" size="icon" className="absolute top-4 right-4 z-20 h-8 w-8" onClick={handleClearFile}>
-                    <XIcon className="h-4 w-4"/>
-                    <span className="sr-only">Hapus File</span>
+          {!isLoading && selectedFile && (
+            <div className="text-center flex flex-col items-center">
+                <FileCheck2 className="w-16 h-16 text-green-500 mb-4" />
+                <p className="text-lg font-semibold text-foreground">
+                    File Berhasil Diproses!
+                </p>
+                 <p className="text-sm text-muted-foreground mb-4">
+                    {fileName}
+                </p>
+                <Button variant="outline" size="sm" onClick={handleClearFile}>
+                    <XIcon className="mr-2 h-4 w-4"/>
+                    Proses File Lain
                 </Button>
-                <div className="w-full max-h-[800px] overflow-auto rounded-lg bg-background py-4">
-                    {Array.from(new Array(pdfDoc.numPages), (_, index) => (
-                        <PdfPage key={`page-${index + 1}`} pdfDoc={pdfDoc} pageNumber={index + 1} />
-                    ))}
-                </div>
             </div>
           )}
         </div>
