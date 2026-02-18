@@ -20,6 +20,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -105,6 +106,7 @@ export default function PdfConverter() {
         mainContainer.classList.add('justify-center');
       }
     } else {
+      // We let the table container handle the scroll, not the body
       document.body.style.overflow = 'auto';
       if (mainContainer) {
         mainContainer.classList.remove('justify-center');
@@ -701,6 +703,12 @@ export default function PdfConverter() {
         </div>
       </CardContent>
 
+      <CardFooter className="flex justify-center">
+        <p className="text-xs text-muted-foreground text-center max-w-md">
+          Privacy First: Your files are processed in real-time and deleted automatically after conversion. We never store your banking data.
+        </p>
+      </CardFooter>
+
       <Dialog open={isPasswordDialogOpen} onOpenChange={(isOpen) => {
         if (!isOpen) {
             if (isSuccess.current) {
@@ -754,5 +762,3 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
