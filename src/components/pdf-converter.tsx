@@ -92,7 +92,7 @@ export default function PdfConverter() {
   const [rawPdfText, setRawPdfText] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedLanguage, setSelectedLanguage] = useState<keyof typeof locales>("English");
+  const [selectedLanguage, setSelectedLanguage] = useState<keyof typeof locales>("Bahasa Indonesia");
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const isSuccess = useRef(false);
   const isMobile = useIsMobile();
@@ -151,7 +151,7 @@ export default function PdfConverter() {
     const transactions: Transaction[] = [];
 
     const isBni = allLines.some(line => line.includes('PT Bank Negara Indonesia'));
-    const isBri = allLines.some(line => line.includes('LAPORAN TRANSAKSI FINANSIAL'));
+    const isBri = allLines.some(line => line.includes('LAPORAN TRANSAKSI FINANSIAL')) && allLines.some(line => line.includes('PT. BANK RAKYAT INDONESIA'));
     const isJenius = allLines.some(line => line.includes('www.jenius.com')) && allLines.some(line => line.includes('PT Bank SMBC Indonesia Tbk'));
 
 
@@ -172,6 +172,7 @@ export default function PdfConverter() {
             'Laporan Mutasi Rekening',
             'Periode:',
             'PT Bank Negara Indonesia (Persero) Tbk',
+            'berizin dan diawasi oleh Otoritas Jasa Keuangan',
         ];
 
         for (const line of allLines) {
@@ -187,13 +188,12 @@ export default function PdfConverter() {
             if (inTransactionSection && endMarkers.some(marker => trimmed.startsWith(marker))) {
                 if (currentBlock.length > 0) blocks.push(currentBlock);
                 inTransactionSection = false;
-                break; // Stop processing lines completely after this marker
+                continue;
             }
 
             if (!inTransactionSection || !trimmed) continue;
             
-            // Explicitly ignore known noise/header/footer lines within the transaction section
-            const pageNumRegex = /^\d+ dari \d+$/;
+            const pageNumRegex = /^\d+\s+dari\s+\d+$/;
             if (noise.some(n => trimmed.includes(n)) || /halaman \d+ dari \d+/.test(trimmed.toLowerCase()) || pageNumRegex.test(trimmed)) {
                 continue;
             }
@@ -272,72 +272,82 @@ export default function PdfConverter() {
         }
     } else if (isBri) {
         const briDateRegex = /^(\d{2}\/\d{2}\/\d{2})/;
-        let startIndex = -1;
-        let endIndex = -1;
+        let blocks: string[][] = [];
+        let currentBlock: string[] = [];
 
-        // 1. Find the boundaries of the transaction table
-        for (let i = 0; i < allLines.length; i++) {
-            const line = allLines[i];
-            if (line.includes('Transaction Date') && line.includes('Description') && line.includes('Debit')) {
-                if (startIndex === -1) startIndex = i + 1;
+        let transactionSectionStarted = false;
+        const headerEndMarkers = ['Transaction Date Description Debit Credit Mutasi Kredit Balance', 'Transaction Date Description Debit Credit Balance', 'Description Debit Credit Balance'];
+        const footerStartMarkers = ['IBIZ_', 'Opening Balance', 'Saldo Awal', 'Closing Balance', 'Saldo Akhir'];
+
+        for (const line of allLines) {
+            const trimmedLine = line.trim();
+
+            if (headerEndMarkers.some(h => line.includes(h))) {
+                transactionSectionStarted = true;
+                continue;
             }
-            if (startIndex !== -1 && (line.startsWith('Opening Balance') || line.startsWith('Saldo Awal'))) {
-                endIndex = i;
-                break;
+            
+            if (footerStartMarkers.some(f => trimmedLine.startsWith(f))) {
+                transactionSectionStarted = false;
+                continue;
+            }
+            
+            if (trimmedLine.startsWith('LAPORAN TRANSAKSI FINANSIAL')) {
+                transactionSectionStarted = false;
+                if(currentBlock.length > 0) blocks.push(currentBlock);
+                currentBlock = [];
+                continue;
+            }
+
+            if (!transactionSectionStarted || !trimmedLine) continue;
+
+            if (/^(Halaman|Page)\s+\d+\s+dari\s+\d+$/.test(trimmedLine) || trimmedLine.startsWith("STATEMENT OF FINANCIAL TRANSACTION")) {
+                continue;
+            }
+
+            if (briDateRegex.test(trimmedLine)) {
+                if (currentBlock.length > 0) blocks.push(currentBlock);
+                currentBlock = [trimmedLine];
+            } else if (currentBlock.length > 0) {
+                currentBlock.push(trimmedLine);
             }
         }
-        
-        // 2. If we have a clear section, process only those lines
-        if (startIndex !== -1) {
-            const linesToProcess = allLines.slice(startIndex, endIndex === -1 ? allLines.length : endIndex);
-            let blocks: string[][] = [];
-            let currentBlock: string[] = [];
+        if (currentBlock.length > 0) blocks.push(currentBlock);
 
-            // 3. Group lines into blocks, where each block is one transaction
-            for (const line of linesToProcess) {
-                const trimmed = line.trim();
-                if (!trimmed || (trimmed.includes('Transaction Date') && trimmed.includes('Description'))) continue; 
+        for (const block of blocks) {
+            try {
+                let combinedText = block.join(' ');
+                const dateMatch = combinedText.match(briDateRegex);
+                if (!dateMatch) continue;
+                
+                const date = dateMatch[1];
+                
+                const amountRegex = /(\d[\d.,]*)\s+(\d[\d.,]*)\s+([\d.,]*)$/;
+                const amountMatch = combinedText.match(amountRegex);
 
-                if (briDateRegex.test(trimmed)) {
-                    if (currentBlock.length > 0) blocks.push(currentBlock);
-                    currentBlock = [trimmed];
-                } else if (currentBlock.length > 0) {
-                    currentBlock.push(trimmed);
-                }
-            }
-            if (currentBlock.length > 0) blocks.push(currentBlock);
-
-            // 4. Parse each block to extract details
-            for (const block of blocks) {
-                const combinedText = block.join(' ');
-                 try {
-                    const dateMatch = combinedText.match(briDateRegex);
-                    if (!dateMatch) continue;
+                if (amountMatch) {
+                    const [fullAmountMatch, debitStr, creditStr, balanceStr] = amountMatch;
                     
-                    const date = dateMatch[1];
-                    const amountRegex = /(\d[\d.,]*)\s+(\d[\d.,]*)\s+(\d[\d.,]*)$/;
-                    const amountMatch = combinedText.match(amountRegex);
+                    let description = combinedText.substring(0, combinedText.lastIndexOf(fullAmountMatch)).trim();
+                    
+                    description = description.replace(briDateRegex, '').trim();
+                    description = description.replace(/^\d{2}:\d{2}:\d{2}\s+/, '').trim();
+                    description = description.replace(/\s+\d{6,8}$/, '');
 
-                    if (amountMatch) {
-                        const [fullAmountMatch, debitStr, creditStr, balanceStr] = amountMatch;
-                        
-                        let description = combinedText.substring(0, combinedText.lastIndexOf(fullAmountMatch)).trim();
-                        
-                        description = description.replace(briDateRegex, '').trim();
-                        description = description.replace(/^\d{2}:\d{2}:\d{2}\s+/, '').trim();
-                        description = description.replace(/\s\d{7,8}$/, '').trim(); // Clean up teller ID
+                    description = description.replace(/BANK NEGARA INDONESIA - PT\s+\d+\s+\(PERSERO - (.*?)\)/, 'BANK BNI ($1)');
+                    description = description.replace(/BANK NEGARA INDONESIA - PT/, 'BANK BNI');
+                    description = description.replace(/\s+/g, ' ').trim();
 
-                        transactions.push({
-                            Tanggal: date,
-                            Transaksi: description,
-                            Pemasukan: parseCurrency(creditStr),
-                            Pengeluaran: parseCurrency(debitStr),
-                            Saldo: parseCurrency(balanceStr),
-                        });
-                    }
-                } catch (e) {
-                    console.error("Failed to parse BRI block:", block.join('\n'), e);
+                    transactions.push({
+                        Tanggal: date,
+                        Transaksi: description,
+                        Pemasukan: parseCurrency(creditStr),
+                        Pengeluaran: parseCurrency(debitStr),
+                        Saldo: parseCurrency(balanceStr),
+                    });
                 }
+            } catch (e) {
+                console.error("Failed to parse BRI block:", block.join('\n'), e);
             }
         }
     } else if (isJenius) {
@@ -345,7 +355,6 @@ export default function PdfConverter() {
         let blocks: string[][] = [];
         let currentBlock: string[] = [];
 
-        // 1. Find start of transactions and group lines into blocks
         let transactionSectionStarted = false;
         const headerEndMarker = "DATE & TIME DETAILS NOTES AMOUNT";
         let headerFound = false;
@@ -366,7 +375,6 @@ export default function PdfConverter() {
                 continue;
             }
             
-            // Stop if we hit the disclaimer
             if (trimmedLine.startsWith('Disclaimer')) {
                 break;
             }
@@ -380,15 +388,25 @@ export default function PdfConverter() {
         }
         if (currentBlock.length > 0) blocks.push(currentBlock);
 
-        // 2. Parse each block
         for (const block of blocks) {
             try {
                 const firstLine = block[0];
                 const dateMatch = firstLine.match(jeniusDateRegex);
                 const amountRegex = /\s([+-])\s([\d,.]+)$/;
-                const amountMatch = firstLine.match(amountRegex);
+                let amountMatch = firstLine.match(amountRegex);
+                let textToParseForDescription = firstLine;
 
-                if (!dateMatch || !amountMatch) continue;
+                if (!dateMatch) continue;
+
+                if (!amountMatch) {
+                    const combined = block.join(' ');
+                    amountMatch = combined.match(amountRegex);
+                    if (amountMatch) {
+                        textToParseForDescription = combined;
+                    } else {
+                        continue;
+                    }
+                }
                 
                 const date = dateMatch[0];
                 const sign = amountMatch[1];
@@ -398,24 +416,24 @@ export default function PdfConverter() {
                 const pengeluaran = sign === '-' ? amountValue : 0;
                 
                 let descriptionParts: string[] = [];
-                descriptionParts.push(firstLine.replace(date, '').replace(amountMatch[0], '').trim());
+                descriptionParts.push(textToParseForDescription.replace(date, '').replace(amountMatch[0], '').trim());
 
-                // Process subsequent lines in the block for the description
-                for (let i = 1; i < block.length; i++) {
-                    const line = block[i];
-                    // These regexes identify metadata lines to be ignored
-                    const txIdRegex = /^\d{8,}[@A-Z\d]*\s+\|/;
-                    const timeOnlyRegex = /^\d{2}:\d{2}$/;
-                    const isBankChargeNote = /^(January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$/.test(line);
-                    const isCategoryLine = /^[A-Z][a-zA-Z\s&]+$/.test(line) && (line.includes('Transfer') || line.includes('Payment') || line.includes('Charge'));
-                    const isUncategorized = line === 'Uncategorized';
+                if (block.length > 1 && textToParseForDescription === firstLine) {
+                    for (let i = 1; i < block.length; i++) {
+                        const line = block[i];
+                        const txIdRegex = /^\d{8,}[@A-Z\d]*\s+\|/;
+                        const timeOnlyRegex = /^\d{2}:\d{2}$/;
+                        const isBankChargeNote = /^(January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$/.test(line);
+                        const isCategoryLine = /^[A-Z][a-zA-Z\s&]+$/.test(line) && (line.includes('Transfer') || line.includes('Payment') || line.includes('Charge'));
+                        const isUncategorized = line === 'Uncategorized';
+                        const isAmountLine = amountRegex.test(line);
 
-
-                    if (!line || txIdRegex.test(line) || timeOnlyRegex.test(line) || isBankChargeNote || isCategoryLine || isUncategorized) {
-                        continue;
+                        if (!line || txIdRegex.test(line) || timeOnlyRegex.test(line) || isBankChargeNote || isCategoryLine || isUncategorized || isAmountLine) {
+                            continue;
+                        }
+                        
+                        descriptionParts.push(line.replace(/^\d{2}:\d{2}\s/, ''));
                     }
-                    
-                    descriptionParts.push(line.replace(/^\d{2}:\d{2}\s/, ''));
                 }
 
                 const description = descriptionParts.join(' ').replace(/\s{2,}/g, ' ').trim();
@@ -427,14 +445,13 @@ export default function PdfConverter() {
                     Transaksi: description,
                     Pemasukan: pemasukan,
                     Pengeluaran: pengeluaran,
-                    Saldo: 0, // Jenius doesn't provide running balance
+                    Saldo: 0, 
                 });
 
             } catch (e) {
                 console.error("Failed to parse Jenius block:", block.join('\n'), e);
             }
         }
-        // Reverse Jenius transactions to show oldest first
         transactions.reverse();
     }
 
@@ -923,6 +940,4 @@ export default function PdfConverter() {
   );
 }
 
-
-    
     
