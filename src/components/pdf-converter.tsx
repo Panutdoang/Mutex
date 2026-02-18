@@ -578,7 +578,7 @@ export default function PdfConverter() {
         )}
 
         <div className={"space-y-6"}>
-          <Accordion type="single" collapsible className="w-full">
+          <Accordion type="single" collapsible className="w-full" defaultValue="item-2">
             <AccordionItem value="item-1">
               <AccordionTrigger className="hover:no-underline">
                 <h3 className="text-lg font-semibold text-foreground">
@@ -731,11 +731,3 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
-
-    
-
-
-
-    
