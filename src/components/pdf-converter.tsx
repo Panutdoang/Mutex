@@ -102,90 +102,145 @@ export default function PdfConverter() {
     const allLines = text.split('\n');
     const transactions: Transaction[] = [];
 
-    const dateRegex = /^(\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4})/;
-    
+    // BNI Parser
+    const bniDateRegex = /^(\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4})/;
+    const bniAmountRegex = /([+-][\d.,]+)\s+([\d.,]+)$/;
+
+    // BRI Parser
+    const briDateRegex = /^(\d{2}\/\d{2}\/\d{2})/;
+    const briAmountRegex = /([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/;
+
+
+    const isBni = allLines.some(line => line.includes('PT Bank Negara Indonesia'));
+    const isBri = allLines.some(line => line.includes('LAPORAN TRANSAKSI FINANSIAL'));
+
+
     const blocks: string[] = [];
     let currentBlock: string[] = [];
     let inTransactionSection = false;
 
-    const ignoreMarkers = [
-        'PT Bank Negara Indonesia',
-        'Laporan Mutasi Rekening',
-        'Periode:',
-        'Tanggal & Waktu',
-        'berizin dan diawasi oleh Otoritas Jasa Keuangan',
+    const bniIgnoreMarkers = [
+        'PT Bank Negara Indonesia', 'Laporan Mutasi Rekening', 'Periode:',
+        'Tanggal & Waktu', 'berizin dan diawasi oleh Otoritas Jasa Keuangan',
         'peserta penjaminan Lembaga Penjamin Simpanan'
     ];
-    
-    const endMarkers = ['Saldo Akhir', 'Informasi Lainnya'];
+    const bniEndMarkers = ['Saldo Akhir', 'Informasi Lainnya'];
 
-    for (const line of allLines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        
-        if (endMarkers.some(marker => trimmed.startsWith(marker))) {
-            inTransactionSection = false;
-            if (currentBlock.length > 0) {
-                blocks.push(currentBlock.join(' '));
-            }
-            currentBlock = [];
-            break; 
-        }
-
-        if (ignoreMarkers.some(marker => trimmed.includes(marker)) || /^\d+ dari \d+$/.test(trimmed)) {
-            continue;
-        }
-
-        if (dateRegex.test(trimmed)) {
-            inTransactionSection = true;
-            if (currentBlock.length > 0) {
-                blocks.push(currentBlock.join(' '));
-            }
-            currentBlock = [trimmed];
-        } else if (inTransactionSection) {
-            currentBlock.push(trimmed);
-        }
-    }
-    if (currentBlock.length > 0) {
-        blocks.push(currentBlock.join(' '));
-    }
-    
-    for (const block of blocks) {
-        try {
-            const dateMatch = block.match(dateRegex);
-            if (!dateMatch) continue;
-
-            const date = dateMatch[1];
+    if (isBni) {
+        for (const line of allLines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
             
-            const amountMatch = block.match(/([+-][\d.,]+)\s+([\d.,]+)/);
-            if (!amountMatch) continue;
+            if (bniEndMarkers.some(marker => trimmed.startsWith(marker))) {
+                inTransactionSection = false;
+                if (currentBlock.length > 0) {
+                    blocks.push(currentBlock.join(' '));
+                }
+                currentBlock = [];
+                break; 
+            }
 
-            const nominalString = amountMatch[1];
-            const saldoString = amountMatch[2];
+            if (bniIgnoreMarkers.some(marker => trimmed.includes(marker)) || /^\d+ dari \d+$/.test(trimmed)) {
+                continue;
+            }
 
-            const debit = nominalString.startsWith('-') ? parseCurrency(nominalString.substring(1)) : 0;
-            const kredit = nominalString.startsWith('+') ? parseCurrency(nominalString.substring(1)) : 0;
-            const saldo = parseCurrency(saldoString);
+            if (bniDateRegex.test(trimmed)) {
+                inTransactionSection = true;
+                if (currentBlock.length > 0) {
+                    blocks.push(currentBlock.join(' '));
+                }
+                currentBlock = [trimmed];
+            } else if (inTransactionSection) {
+                currentBlock.push(trimmed);
+            }
+        }
+        if (currentBlock.length > 0) {
+            blocks.push(currentBlock.join(' '));
+        }
+        
+        for (const block of blocks) {
+            try {
+                const dateMatch = block.match(bniDateRegex);
+                if (!dateMatch) continue;
+                const date = dateMatch[1];
+                
+                const amountMatch = block.match(bniAmountRegex);
+                if (!amountMatch) continue;
 
-            let description = block;
-            description = description.replace(dateRegex, ''); // remove date
-            description = description.replace(amountMatch[0], ''); // remove amounts
-            description = description.replace(/\d{2}:\d{2}:\d{2} WIB/, ''); // remove time
-            description = description.trim().replace(/\s{2,}/g, ' ');
+                const nominalString = amountMatch[1];
+                const saldoString = amountMatch[2];
 
-            transactions.push({
-                Tanggal: date,
-                Deskripsi: description,
-                Debit: debit,
-                Kredit: kredit,
-                Saldo: saldo,
-            });
+                const debit = nominalString.startsWith('-') ? parseCurrency(nominalString.substring(1)) : 0;
+                const kredit = nominalString.startsWith('+') ? parseCurrency(nominalString.substring(1)) : 0;
+                const saldo = parseCurrency(saldoString);
 
-        } catch (e) {
-            console.error("Failed to parse block:", block, e);
-            continue;
+                let description = block;
+                description = description.replace(bniDateRegex, '');
+                description = description.replace(bniAmountRegex, '');
+                description = description.replace(/\d{2}:\d{2}:\d{2} WIB/, '');
+                description = description.trim().replace(/\s{2,}/g, ' ');
+
+                transactions.push({
+                    Tanggal: date,
+                    Deskripsi: description,
+                    Debit: debit,
+                    Kredit: kredit,
+                    Saldo: saldo,
+                });
+
+            } catch (e) {
+                console.error("Failed to parse BNI block:", block, e);
+            }
+        }
+    } else if (isBri) {
+        let transactionLinesStarted = false;
+        for (const line of allLines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+
+            if (trimmed.startsWith('Transaction Date')) {
+                transactionLinesStarted = true;
+                continue;
+            }
+            if(trimmed.startsWith('Opening Balance')){
+                transactionLinesStarted = false;
+                continue;
+            }
+
+            if(transactionLinesStarted && briDateRegex.test(trimmed)){
+                 try {
+                    const parts = trimmed.split(/\s{2,}/);
+                    const dateMatch = trimmed.match(briDateRegex);
+                    if(!dateMatch) continue;
+                    
+                    const amountPart = parts[parts.length - 1];
+                    const amountMatch = amountPart.match(briAmountRegex);
+                    if(!amountMatch) continue;
+
+                    const [_, debitStr, creditStr, balanceStr] = amountMatch;
+                    
+                    let description = trimmed;
+                    description = description.replace(briDateRegex, '');
+                    description = description.replace(amountPart, '');
+                    description = description.replace(/\d{2}:\d{2}:\d{2}/, ''); // time
+                    description = description.replace(/\d{7}$/, ''); // teller id
+                    description = description.trim();
+
+                    transactions.push({
+                        Tanggal: dateMatch[1],
+                        Deskripsi: description,
+                        Debit: parseCurrency(debitStr),
+                        Kredit: parseCurrency(creditStr),
+                        Saldo: parseCurrency(balanceStr),
+                    });
+
+                } catch(e) {
+                    console.error("Failed to parse BRI line:", line, e);
+                }
+            }
         }
     }
+
 
     setData(transactions);
     setIsLoading(false);
@@ -455,7 +510,7 @@ export default function PdfConverter() {
               </AccordionTrigger>
               <AccordionContent>
                 <div className="w-full rounded-md border bg-background">
-                  <pre className="p-4 text-sm text-foreground overflow-auto max-h-[400px]">
+                  <pre className="p-4 text-sm text-foreground overflow-y-auto max-h-[400px] whitespace-pre-wrap">
                     <code>{rawPdfText}</code>
                   </pre>
                 </div>
@@ -570,7 +625,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
 
     
