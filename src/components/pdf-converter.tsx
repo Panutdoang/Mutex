@@ -639,7 +639,7 @@ export default function PdfConverter() {
                 {data.length > 0 ? (
                     <div className="rounded-lg shadow-neumorphic-inset p-2 max-h-[500px] overflow-x-auto overflow-y-auto">
                       <Table>
-                        <TableHeader className="sticky top-0 bg-card z-10">
+                        <TableHeader className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm">
                           <TableRow>
                             <TableHead className="text-xs">Tanggal</TableHead>
                             <TableHead className="text-xs">Transaksi</TableHead>
@@ -652,7 +652,7 @@ export default function PdfConverter() {
                           {data.map((row, index) => (
                             <TableRow key={index}>
                               <TableCell className="font-medium text-xs select-none">{row.Tanggal}</TableCell>
-                              <TableCell className="text-xs select-none whitespace-nowrap">{row.Transaksi}</TableCell>
+                              <TableCell className="text-xs select-none whitespace-nowrap md:whitespace-normal">{row.Transaksi}</TableCell>
                               <TableCell className="text-right font-mono text-xs select-none">
                                 {row.Pemasukan > 0 ? row.Pemasukan.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
