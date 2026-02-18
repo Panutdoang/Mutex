@@ -637,43 +637,41 @@ export default function PdfConverter() {
               </AccordionTrigger>
               <AccordionContent>
                 {data.length > 0 ? (
-                    <div className="rounded-lg shadow-neumorphic-inset overflow-x-auto">
-                        <div className="max-h-[500px] overflow-y-auto">
-                          <Table>
-                            <TableHeader className="sticky top-0 z-10 backdrop-blur-sm bg-card/80">
-                              <TableRow className="border-b-0">
-                                <TableHead className="text-xs rounded-tl-lg">Tanggal</TableHead>
-                                <TableHead className="text-xs">Transaksi</TableHead>
-                                <TableHead className="text-right text-xs">Pemasukan</TableHead>
-                                <TableHead className="text-right text-xs">Pengeluaran</TableHead>
-                                <TableHead className="text-right text-xs rounded-tr-lg">Saldo</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {data.map((row, index) => (
-                                <TableRow key={index} className="border-t">
-                                  <TableCell className="font-medium text-xs select-none whitespace-nowrap">{row.Tanggal}</TableCell>
-                                  <TableCell className="text-xs select-none">{row.Transaksi}</TableCell>
-                                  <TableCell className="text-right font-mono text-xs select-none whitespace-nowrap">
-                                    {row.Pemasukan > 0 ? row.Pemasukan.toLocaleString("id-ID", {
-                                      minimumFractionDigits: 2,
-                                    }) : "0.00"}
-                                  </TableCell>
-                                  <TableCell className="text-right font-mono text-xs select-none whitespace-nowrap">
-                                    {row.Pengeluaran > 0 ? row.Pengeluaran.toLocaleString("id-ID", {
-                                      minimumFractionDigits: 2,
-                                    }) : "0.00"}
-                                  </TableCell>
-                                  <TableCell className="text-right font-mono text-xs select-none whitespace-nowrap">
-                                    {row.Saldo.toLocaleString("id-ID", {
-                                      minimumFractionDigits: 2,
-                                    })}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
+                    <div className="rounded-lg shadow-neumorphic-inset overflow-auto max-h-[500px]">
+                      <Table>
+                        <TableHeader className="sticky top-0 z-10 backdrop-blur-sm bg-card/80">
+                          <TableRow className="border-b-0">
+                            <TableHead className="text-xs rounded-tl-lg whitespace-nowrap">Tanggal</TableHead>
+                            <TableHead className="text-xs">Transaksi</TableHead>
+                            <TableHead className="text-right text-xs whitespace-nowrap">Pemasukan</TableHead>
+                            <TableHead className="text-right text-xs whitespace-nowrap">Pengeluaran</TableHead>
+                            <TableHead className="text-right text-xs rounded-tr-lg whitespace-nowrap">Saldo</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {data.map((row, index) => (
+                            <TableRow key={index} className="border-t">
+                              <TableCell className="font-medium text-xs select-none whitespace-nowrap">{row.Tanggal}</TableCell>
+                              <TableCell className="text-xs select-none">{row.Transaksi}</TableCell>
+                              <TableCell className="text-right font-mono text-xs select-none whitespace-nowrap">
+                                {row.Pemasukan > 0 ? row.Pemasukan.toLocaleString("id-ID", {
+                                  minimumFractionDigits: 2,
+                                }) : "0.00"}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-xs select-none whitespace-nowrap">
+                                {row.Pengeluaran > 0 ? row.Pengeluaran.toLocaleString("id-ID", {
+                                  minimumFractionDigits: 2,
+                                }) : "0.00"}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-xs select-none whitespace-nowrap">
+                                {row.Saldo.toLocaleString("id-ID", {
+                                  minimumFractionDigits: 2,
+                                })}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
                 ) : (
                   <div className="flex items-center justify-center rounded-md shadow-neumorphic-inset p-8 text-muted-foreground">
@@ -756,5 +754,3 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
