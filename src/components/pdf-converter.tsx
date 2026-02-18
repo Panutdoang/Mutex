@@ -12,6 +12,7 @@ import {
   X as XIcon,
   FileCheck2,
   File as FileIcon,
+  Repeat,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -467,6 +468,7 @@ export default function PdfConverter() {
   return (
     <Card className="w-full shadow-xl">
       <CardHeader className="text-center">
+        <Repeat className="mx-auto h-12 w-12 text-primary mb-2" />
         <CardTitle className="text-3xl font-bold text-primary">
           Mutex
         </CardTitle>
