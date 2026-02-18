@@ -127,6 +127,7 @@ export default function PdfConverter() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const isSuccess = useRef(false);
 
 
   useEffect(() => {
@@ -318,15 +319,13 @@ export default function PdfConverter() {
     }
     setPdfDoc(null);
 
+    const originalPdfData = pdfData.slice(0); // Make a copy before trying to use it
+
     try {
-        // The getDocument method can transfer the ArrayBuffer to a worker thread,
-        // which detaches it. If the PDF is password protected, we'll need the
-        // buffer again. So, we pass a copy to getDocument, and keep the original
-        // in case we need to retry with a password.
-        const pdfDataCopy = pdfData.slice(0);
-        const typedArray = new Uint8Array(pdfDataCopy);
+        const typedArray = new Uint8Array(pdfData);
         const pdf = await pdfjs.getDocument({ data: typedArray, password: filePassword }).promise;
         setPdfDoc(pdf);
+        isSuccess.current = true; // Set success flag
 
         let fullText = "";
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -368,8 +367,9 @@ export default function PdfConverter() {
 
     } catch (err: any) {
         if (err.name === 'PasswordException') {
-            // The original pdfData is still attached because we passed a copy to pdf.js
-            setPendingData(pdfData);
+            isSuccess.current = false;
+            // The original pdfData was detached. Use the copy we made.
+            setPendingData(originalPdfData);
             setIsPasswordDialogOpen(true);
             if (filePassword) {
                 setError("Password salah. Silakan coba lagi.");
@@ -687,7 +687,11 @@ export default function PdfConverter() {
 
       <Dialog open={isPasswordDialogOpen} onOpenChange={(isOpen) => {
         if (!isOpen) {
-          handleClearFile({ stopPropagation: () => {} } as React.MouseEvent);
+            if (isSuccess.current) {
+                isSuccess.current = false;
+            } else {
+                handleClearFile({ stopPropagation: () => {} } as React.MouseEvent);
+            }
         }
         setIsPasswordDialogOpen(isOpen);
       }}>
@@ -725,10 +729,7 @@ export default function PdfConverter() {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => {
-                setIsPasswordDialogOpen(false);
-                handleClearFile({ stopPropagation: () => {} } as React.MouseEvent);
-              }}>Batal</Button>
+              <Button type="button" variant="secondary" onClick={() => setIsPasswordDialogOpen(false)}>Batal</Button>
               <Button type="submit">Buka</Button>
             </DialogFooter>
           </form>
