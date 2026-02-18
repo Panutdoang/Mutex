@@ -93,23 +93,27 @@ export default function PdfConverter() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<keyof typeof locales>("English");
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const isSuccess = useRef(false);
   const isMobile = useIsMobile();
   const t = locales[selectedLanguage];
   const languages = Object.keys(locales);
 
-  const handleThemeChange = (theme: 'light' | 'dark') => {
+  const handleThemeChange = (newTheme: 'light' | 'dark') => {
+    setTheme(newTheme);
+  };
+
+  useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  };
+  }, [theme]);
 
   useEffect(() => {
     const mainContainer = document.querySelector('#main-container');
 
-    document.documentElement.classList.add('dark');
     document.body.style.overflow = 'auto';
     if (mainContainer) {
       mainContainer.classList.remove('justify-center');
@@ -527,12 +531,12 @@ export default function PdfConverter() {
           </DropdownMenu>
         </div>
         <div className="absolute top-4 right-4 flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => handleThemeChange('light')}>
-                <Sun className="h-6 w-6 text-muted-foreground" />
+            <Button variant={theme === 'light' ? 'default' : 'ghost'} size="icon" onClick={() => handleThemeChange('light')} className={cn(theme === 'light' && 'shadow-neumorphic-inset')}>
+                <Sun className={cn("h-6 w-6", theme === 'light' ? "text-primary" : "text-muted-foreground")} />
                 <span className="sr-only">{t.themeLight}</span>
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => handleThemeChange('dark')}>
-                <Moon className="h-6 w-6 text-muted-foreground" />
+            <Button variant={theme === 'dark' ? 'default' : 'ghost'} size="icon" onClick={() => handleThemeChange('dark')} className={cn(theme === 'dark' && 'shadow-neumorphic-inset')}>
+                <Moon className={cn("h-6 w-6", theme === 'dark' ? "text-primary" : "text-muted-foreground")} />
                 <span className="sr-only">{t.themeDark}</span>
             </Button>
         </div>
@@ -659,7 +663,7 @@ export default function PdfConverter() {
               </AccordionTrigger>
               <AccordionContent>
                 {data.length > 0 ? (
-                    <div className="rounded-lg shadow-neumorphic-inset overflow-auto max-h-[500px]">
+                    <div className="rounded-lg shadow-neumorphic-inset p-2 max-h-[500px] overflow-x-auto overflow-y-auto">
                       <Table>
                         <TableHeader className="sticky top-0 z-10 bg-card/90 backdrop-blur-sm">
                           <TableRow>
