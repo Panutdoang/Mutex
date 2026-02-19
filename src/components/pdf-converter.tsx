@@ -151,7 +151,7 @@ export default function PdfConverter() {
     const transactions: Transaction[] = [];
 
     const isBni = allLines.some(line => line.includes('PT Bank Negara Indonesia'));
-    const isBri = allLines.some(line => line.includes('LAPORAN TRANSAKSI FINANSIAL')) && (allLines.some(line => line.includes('PT. BANK RAKYAT INDONESIA')) || allLines.some(line => line.includes('via BRImo')) || allLines.some(line => line.startsWith('IBIZ_')));
+    const isBri = allLines.some(line => line.includes('PT. BANK RAKYAT INDONESIA') || line.includes('via BRImo') || line.startsWith('IBIZ_'));
     const isJenius = allLines.some(line => line.includes('www.jenius.com')) && allLines.some(line => line.includes('PT Bank BTPN Tbk'));
 
 
@@ -341,7 +341,7 @@ export default function PdfConverter() {
 
                 finalDescription = finalDescription.replace(/BANK NEGARA INDONESIA - PT\s+\(PERSERO - ([^)]+)\)/g, 'BANK BNI ($1)');
                 finalDescription = finalDescription.replace(/BANK NEGARA INDONESIA - PT/g, 'BANK BNI');
-                finalDescription = finalDescription.replace(/BANK MANDIRI \(PERSERO\), PT - ([^)]+)/g, 'BANK MANDIRI ($1)');
+                finalDescription = finalDescription.replace(/BANK MANDIRI \(PERSERO\), PT/g, 'BANK MANDIRI');
 
                 transactions.push({
                     Tanggal: date,
@@ -938,3 +938,4 @@ export default function PdfConverter() {
 }
 
     
+
