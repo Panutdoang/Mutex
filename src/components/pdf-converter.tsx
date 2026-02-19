@@ -155,26 +155,23 @@ export default function PdfConverter() {
     const isBri = allLines.some(line => line.includes('PT. BANK RAKYAT INDONESIA') || line.includes('via BRImo') || line.startsWith('IBIZ_') || allLines.some(l => l.includes("BritAma")));
 
     if (isJenius) {
-        let transactionLines: string[] = [];
-        let inTransactionSection = false;
-        
-        const headerKeywords = ["DETAILS", "NOTES", "AMOUNT"];
-        const footerKeyword = "Disclaimer";
+        const headerLineIndex = allLines.findIndex(l => 
+            l.toUpperCase().includes("AMOUNT") && l.toUpperCase().includes("DETAILS")
+        );
 
-        for (const line of allLines) {
-            const upperLine = line.toUpperCase();
-            if (inTransactionSection) {
-                if (line.startsWith(footerKeyword)) {
-                    inTransactionSection = false;
-                    break;
-                }
-                transactionLines.push(line);
-            } else {
-                if (headerKeywords.every(k => upperLine.includes(k))) {
-                    inTransactionSection = true;
-                }
-            }
+        if (headerLineIndex === -1) {
+            setData([]);
+            return;
         }
+
+        const footerLineIndex = allLines.findIndex((l, i) => 
+            i > headerLineIndex && l.startsWith("Disclaimer")
+        );
+
+        const transactionLines = allLines.slice(
+            headerLineIndex + 1,
+            footerLineIndex !== -1 ? footerLineIndex : allLines.length
+        );
 
         if (transactionLines.length === 0) {
             setData([]);
@@ -938,5 +935,3 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
