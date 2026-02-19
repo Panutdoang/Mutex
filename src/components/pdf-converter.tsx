@@ -166,13 +166,13 @@ export default function PdfConverter() {
         const startMarkers = ['Tanggal & Waktu Rincian Transaksi Nominal (IDR) Saldo (IDR)', 'Saldo Awal'];
         const endMarkers = ['Saldo Akhir', 'Informasi Lainnya'];
         const noise = [
-            'peserta penjaminan Lembaga Penjamin Simpanan',
-            'Tanggal & Waktu Rincian Transaksi Nominal (IDR) Saldo (IDR)',
-            'lanjutan dari halaman sebelumnya',
             'Laporan Mutasi Rekening',
             'Periode:',
             'PT Bank Negara Indonesia (Persero) Tbk',
             'berizin dan diawasi oleh Otoritas Jasa Keuangan',
+            'peserta penjaminan Lembaga Penjamin Simpanan',
+            'Tanggal & Waktu Rincian Transaksi Nominal (IDR) Saldo (IDR)',
+            'lanjutan dari halaman sebelumnya'
         ];
 
         for (const line of allLines) {
@@ -273,30 +273,39 @@ export default function PdfConverter() {
     } else if (isBri) {
         const startMarker = "Transaction Date Transaction Description";
         const endMarker = "Saldo Awal";
-
+        const pageHeaderMarker = "Tanggal Transaksi Uraian Transaksi";
+        
         let startIndex = allLines.findIndex(line => line.includes(startMarker));
         if (startIndex === -1) {
             setData([]);
-            return; 
+            return;
+        }
+
+        let relevantLines: string[] = [];
+        let inTransactionSection = false;
+
+        for (const line of allLines) {
+            if (line.includes(startMarker) || (inTransactionSection && line.includes(pageHeaderMarker))) {
+                inTransactionSection = true;
+                continue;
+            }
+            if (line.trim().startsWith(endMarker)) {
+                inTransactionSection = false;
+                break; 
+            }
+            if (inTransactionSection && line.trim() && !line.startsWith("IBIZ_") && !/Halaman \d+ dari \d+/.test(line)) {
+                relevantLines.push(line);
+            }
         }
         
-        let endIndex = allLines.findIndex(line => line.trim().startsWith(endMarker));
-        if (endIndex === -1) {
-            endIndex = allLines.length;
-        }
-
-        const relevantLines = allLines.slice(startIndex + 1, endIndex);
-
         const blocks: string[][] = [];
         let currentBlock: string[] = [];
         const dateRegex = /^\d{2}\/\d{2}\/\d{2}/;
 
         for (const line of relevantLines) {
             const trimmed = line.trim();
-            if (!trimmed || trimmed.includes(startMarker) || trimmed.startsWith("IBIZ_")) {
-                continue;
-            }
-
+            if (!trimmed) continue;
+            
             if (dateRegex.test(trimmed)) {
                 if (currentBlock.length > 0) {
                     blocks.push(currentBlock);
@@ -316,10 +325,11 @@ export default function PdfConverter() {
             if (block.length === 0) continue;
 
             const firstLine = block[0];
-            const restOfLines = block.slice(1);
+            const restOfBlock = block.slice(1).join(' ');
+            const combinedLine = `${firstLine} ${restOfBlock}`;
             
-            const dateMatch = firstLine.match(dateRegex);
-            const amountMatch = firstLine.match(amountRegex);
+            const dateMatch = combinedLine.match(dateRegex);
+            const amountMatch = combinedLine.match(amountRegex);
 
             if (dateMatch && amountMatch) {
                 const date = dateMatch[0];
@@ -327,21 +337,19 @@ export default function PdfConverter() {
                 const creditStr = amountMatch[2];
                 const balanceStr = amountMatch[3];
                 
-                let descPart1 = firstLine.substring(date.length, amountMatch.index).trim();
+                let descPart1 = combinedLine.substring(dateMatch[0].length, amountMatch.index).trim();
                 descPart1 = descPart1.replace(/^\d{2}:\d{2}:\d{2}\s/, '').trim();
-                descPart1 = descPart1.replace(/\s\d{7,8}$/, '').trim(); 
+                descPart1 = descPart1.replace(/\s\d{7,8}$/, '').trim(); // Remove Teller ID
                 
-                const descPart2 = restOfLines.join(' ').trim();
+                let descPart2 = combinedLine.substring(amountMatch.index + amountMatch[0].length).trim();
                 
-                let finalDescription = descPart1;
-                if (descPart2) {
-                     finalDescription += ` ${descPart2}`;
-                }
-                finalDescription = finalDescription.trim();
+                let finalDescription = `${descPart1} ${descPart2}`.trim();
 
-                finalDescription = finalDescription.replace(/BANK NEGARA INDONESIA - PT\s+\(PERSERO - ([^)]+)\)/g, 'BANK BNI ($1)');
-                finalDescription = finalDescription.replace(/BANK NEGARA INDONESIA - PT/g, 'BANK BNI');
-                finalDescription = finalDescription.replace(/BANK MANDIRI \(PERSERO\), PT/g, 'BANK MANDIRI');
+                finalDescription = finalDescription.replace('BANK NEGARA INDONESIA - PT', 'BANK BNI');
+                finalDescription = finalDescription.replace('BANK MANDIRI (PERSERO), PT', 'BANK MANDIRI');
+                finalDescription = finalDescription.replace(/\(PERSERO - (.*)/, '($1');
+
+                finalDescription = finalDescription.replace(/\s{2,}/g, ' ').trim();
 
                 transactions.push({
                     Tanggal: date,
@@ -939,3 +947,4 @@ export default function PdfConverter() {
 
     
 
+    
