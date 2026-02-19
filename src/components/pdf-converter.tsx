@@ -151,8 +151,8 @@ export default function PdfConverter() {
     const transactions: Transaction[] = [];
 
     const isBni = allLines.some(line => line.includes('PT Bank Negara Indonesia'));
-    const isBri = allLines.some(line => line.includes('LAPORAN TRANSAKSI FINANSIAL')) && allLines.some(line => line.includes('PT. BANK RAKYAT INDONESIA'));
-    const isJenius = allLines.some(line => line.includes('www.jenius.com')) && allLines.some(line => line.includes('PT Bank SMBC Indonesia Tbk'));
+    const isBri = allLines.some(line => line.includes('LAPORAN TRANSAKSI FINANSIAL')) && (allLines.some(line => line.includes('PT. BANK RAKYAT INDONESIA')) || allLines.some(line => line.includes('via BRImo')) || allLines.some(line => line.startsWith('IBIZ_')));
+    const isJenius = allLines.some(line => line.includes('www.jenius.com')) && allLines.some(line => line.includes('PT Bank BTPN Tbk'));
 
 
     if (isBni) {
@@ -936,3 +936,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
