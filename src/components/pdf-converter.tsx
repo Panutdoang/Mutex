@@ -671,9 +671,11 @@ export default function PdfConverter() {
         <div className="absolute top-4 left-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Globe className="mr-2 h-4 w-4" />
-                <span>{selectedLanguage}</span>
+              <Button variant="outline" size={isMobile ? "icon" : "sm"}>
+                <Globe className={cn("h-4 w-4", !isMobile && "mr-2")} />
+                <span className={cn(isMobile && "sr-only")}>
+                  {selectedLanguage}
+                </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
@@ -944,6 +946,8 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
 
     
 
