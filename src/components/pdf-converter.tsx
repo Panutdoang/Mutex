@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback, DragEvent, useRef, useEffect, FormEvent } from "react";
-import *XLSX from "xlsx";
+import * as XLSX from "xlsx";
 import {
   UploadCloud,
   Loader2,
@@ -945,4 +945,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
 
