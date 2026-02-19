@@ -271,84 +271,75 @@ export default function PdfConverter() {
             });
         }
     } else if (isBri) {
-        const headerIndex = allLines.findIndex(line => line.includes("Transaction Date") && line.includes("Transaction Description"));
-        if (headerIndex === -1) {
+        const startMarker = "Transaction Date Transaction Description";
+        const endMarker = "Saldo Awal";
+
+        let startIndex = allLines.findIndex(line => line.includes(startMarker));
+        if (startIndex === -1) {
             setData([]);
-            return;
+            return; 
+        }
+        
+        let endIndex = allLines.findIndex(line => line.trim().startsWith(endMarker));
+        if (endIndex === -1) {
+            endIndex = allLines.length;
         }
 
-        const footerIndex = allLines.findIndex(line => line.trim().startsWith("Saldo Awal") || line.trim().startsWith("Opening Balance"));
-        
-        const relevantLines = allLines.slice(
-            headerIndex + 1,
-            footerIndex !== -1 ? footerIndex : allLines.length
-        );
+        const relevantLines = allLines.slice(startIndex + 1, endIndex);
 
+        const blocks: string[][] = [];
         let currentBlock: string[] = [];
-        
-        const briDateRegex = /^\d{2}\/\d{2}\/\d{2}/;
-        const amountRegex = /(\d{1,3}(?:,\d{3})*\.\d{2})\s+(\d{1,3}(?:,\d{3})*\.\d{2})\s+(\d{1,3}(?:,\d{3})*\.\d{2})$/;
+        const dateRegex = /^\d{2}\/\d{2}\/\d{2}/;
 
         for (const line of relevantLines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine) continue;
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.includes(startMarker) || trimmed.startsWith("IBIZ_")) {
+                continue;
+            }
 
-            // If a line starts with a date, it's either a new transaction or a continuation
-            if (briDateRegex.test(trimmedLine)) {
-                // If there's content in currentBlock, process it first
+            if (dateRegex.test(trimmed)) {
                 if (currentBlock.length > 0) {
-                    const combinedText = currentBlock.join(' ').replace(/\s+/g, ' ');
-                    const dateMatch = combinedText.match(briDateRegex);
-                    const amountMatch = combinedText.match(amountRegex);
-
-                    if (dateMatch && amountMatch) {
-                        const date = dateMatch[0];
-                        const debitStr = amountMatch[1];
-                        const creditStr = amountMatch[2];
-                        const balanceStr = amountMatch[3];
-
-                        let description = combinedText.substring(date.length, amountMatch.index).trim();
-                        description = description.replace(/^\d{2}:\d{2}:\d{2}\s/, '').trim();
-                        description = description.replace(/\s\d{7}$/, '').trim(); // Remove trailing teller ID
-
-                        let finalDescription = description.replace(/BANK NEGARA INDONESIA - PT\s+\(PERSERO - ([^)]+)\)/g, 'BANK BNI ($1)');
-                        finalDescription = finalDescription.replace(/BANK NEGARA INDONESIA - PT/g, 'BANK BNI');
-                        finalDescription = finalDescription.replace(/BANK MANDIRI \(PERSERO\), PT - ([^)]+)/g, 'BANK MANDIRI ($1)');
-
-                        transactions.push({
-                            Tanggal: date,
-                            Transaksi: finalDescription,
-                            Pemasukan: parseCurrency(creditStr),
-                            Pengeluaran: parseCurrency(debitStr),
-                            Saldo: parseCurrency(balanceStr),
-                        });
-                    }
-                    currentBlock = []; // Reset block
+                    blocks.push(currentBlock);
                 }
-                currentBlock.push(trimmedLine);
+                currentBlock = [trimmed];
             } else if (currentBlock.length > 0) {
-                // This line is a continuation of the previous description
-                currentBlock.push(trimmedLine);
+                currentBlock.push(trimmed);
             }
         }
-        
-        // Process the last remaining block
         if (currentBlock.length > 0) {
-           const combinedText = currentBlock.join(' ').replace(/\s+/g, ' ');
-            const dateMatch = combinedText.match(briDateRegex);
-            const amountMatch = combinedText.match(amountRegex);
+            blocks.push(currentBlock);
+        }
+        
+        const amountRegex = /(\d{1,3}(?:,\d{3})*\.\d{2})\s+(\d{1,3}(?:,\d{3})*\.\d{2})\s+(\d{1,3}(?:,\d{3})*\.\d{2})/;
+
+        for (const block of blocks) {
+            if (block.length === 0) continue;
+
+            const firstLine = block[0];
+            const restOfLines = block.slice(1);
+            
+            const dateMatch = firstLine.match(dateRegex);
+            const amountMatch = firstLine.match(amountRegex);
 
             if (dateMatch && amountMatch) {
                 const date = dateMatch[0];
                 const debitStr = amountMatch[1];
                 const creditStr = amountMatch[2];
                 const balanceStr = amountMatch[3];
+                
+                let descPart1 = firstLine.substring(date.length, amountMatch.index).trim();
+                descPart1 = descPart1.replace(/^\d{2}:\d{2}:\d{2}\s/, '').trim();
+                descPart1 = descPart1.replace(/\s\d{7,8}$/, '').trim(); 
+                
+                const descPart2 = restOfLines.join(' ').trim();
+                
+                let finalDescription = descPart1;
+                if (descPart2) {
+                     finalDescription += ` ${descPart2}`;
+                }
+                finalDescription = finalDescription.trim();
 
-                let description = combinedText.substring(date.length, amountMatch.index).trim();
-                description = description.replace(/^\d{2}:\d{2}:\d{2}\s/, '').trim();
-                description = description.replace(/\s\d{7}$/, '').trim();
-
-                let finalDescription = description.replace(/BANK NEGARA INDONESIA - PT\s+\(PERSERO - ([^)]+)\)/g, 'BANK BNI ($1)');
+                finalDescription = finalDescription.replace(/BANK NEGARA INDONESIA - PT\s+\(PERSERO - ([^)]+)\)/g, 'BANK BNI ($1)');
                 finalDescription = finalDescription.replace(/BANK NEGARA INDONESIA - PT/g, 'BANK BNI');
                 finalDescription = finalDescription.replace(/BANK MANDIRI \(PERSERO\), PT - ([^)]+)/g, 'BANK MANDIRI ($1)');
 
@@ -945,5 +936,3 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-
