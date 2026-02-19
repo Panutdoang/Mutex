@@ -150,9 +150,9 @@ export default function PdfConverter() {
     const allLines = text.split('\n');
     const transactions: Transaction[] = [];
 
-    const isJenius = allLines.some(line => line.includes('www.jenius.com') || line.includes('PT Bank BTPN Tbk'));
+    const isJenius = allLines.some(line => line.includes('www.jenius.com') || line.includes('PT Bank BTPN Tbk') || line.includes('PT Bank SMBC Indonesia Tbk'));
     const isBni = allLines.some(line => line.includes('PT Bank Negara Indonesia'));
-    const isBri = allLines.some(line => line.includes('PT. BANK RAKYAT INDONESIA') || line.includes('via BRImo') || line.startsWith('IBIZ_') || allLines.some(l => l.includes("BritAma")));
+    const isBri = allLines.some(l => l.includes('PT. BANK RAKYAT INDONESIA') || l.includes('via BRImo') || l.startsWith('IBIZ_') || allLines.some(l => l.includes("BritAma")));
 
     if (isJenius) {
         const headerLineIndex = allLines.findIndex(l => 
@@ -173,18 +173,14 @@ export default function PdfConverter() {
             footerLineIndex !== -1 ? footerLineIndex : allLines.length
         );
 
-        if (transactionLines.length === 0) {
-            setData([]);
-            return;
-        }
-
-        const jeniusDateRegex = /^\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4}/i;
+        const jeniusDateRegex = /^\d{1,2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4}/i;
         const blocks: string[][] = [];
         let currentBlock: string[] = [];
 
         for (const line of transactionLines) {
             const trimmedLine = line.trim();
-            if (!trimmedLine || /Halaman \d+ dari \d+/.test(trimmedLine)) {
+            const noise = ["TRANSACTION HISTORY", "DATE & TIME DETAILS NOTES AMOUNT", "Transaction ID | Category Transaction type"];
+            if (!trimmedLine || /^\d+ of \d+$/.test(trimmedLine) || noise.some(n => trimmedLine.includes(n))) {
                 continue;
             }
             
@@ -203,12 +199,11 @@ export default function PdfConverter() {
         
         for (const block of blocks) {
             try {
-                if (block.length === 0) continue;
-            
-                let combinedText = block.join(' ').replace(/\s{2,}/g, ' ');
+                if (block.length < 1) continue;
         
-                const amountRegex = /([+-])\s+((?:\d{1,3}(?:\.\d{3})*|\d+),\d{2})$/;
-                const amountMatch = combinedText.match(amountRegex);
+                const firstLine = block[0];
+                const amountRegex = /([+-])\s+([\d,.]+)$/;
+                const amountMatch = firstLine.match(amountRegex);
         
                 if (!amountMatch) continue;
         
@@ -217,33 +212,26 @@ export default function PdfConverter() {
                 const pemasukan = sign === '+' ? amountValue : 0;
                 const pengeluaran = sign === '-' ? amountValue : 0;
         
-                let description = combinedText.replace(amountRegex, '').trim();
-        
+                let description = firstLine.replace(amountRegex, '').trim();
                 const dateMatch = description.match(jeniusDateRegex);
                 if (!dateMatch) continue;
                 const date = dateMatch[0];
                 description = description.replace(date, '').trim();
         
-                description = description.replace(/^\d{2}:\d{2}\s/, '').trim();
-                description = description.replace(/\s*\|\s*[\w@]+/, '').trim();
+                const notes = block.slice(1)
+                    .map(line => {
+                        if (line.includes('|')) return '';
+                        return line.replace(/^\d{2}:\d{2}\s*/, '').trim();
+                    })
+                    .filter(line => line.length > 0);
         
-                const categories = [
-                    'Transfer & Payment', 'Top-up & e-Wallet', 'Fees & Charges',
-                    'Shopping', 'Food & Drink', 'Transportation', 'Entertainment',
-                    'Bills', 'Health', 'Education', 'Investment', 'Family', 'Gift & Donation',
-                    'Income', 'Uncategorized'
-                ];
-                const categoryRegex = new RegExp(`(?:${categories.join('|')})$`, 'i');
-                description = description.replace(categoryRegex, '').trim();
-        
-                const monthYearNoteRegex = /(?:January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$/i;
-                description = description.replace(monthYearNoteRegex, '').trim();
+                const fullDescription = [description, ...notes].join(' ').replace(/\s{2,}/g, ' ').trim();
                 
-                if (!description) continue;
+                if (!fullDescription) continue;
                 
                 transactions.push({
                     Tanggal: date,
-                    Transaksi: description,
+                    Transaksi: fullDescription,
                     Pemasukan: pemasukan,
                     Pengeluaran: pengeluaran,
                     Saldo: 0,
@@ -935,3 +923,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
