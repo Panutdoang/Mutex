@@ -152,83 +152,83 @@ export default function PdfConverter() {
 
     const isJenius = allLines.some(line => line.includes('www.jenius.com') || line.includes('PT Bank BTPN Tbk'));
     const isBni = allLines.some(line => line.includes('PT Bank Negara Indonesia'));
-    const isBri = allLines.some(line => line.includes('PT. BANK RAKYAT INDONESIA') || line.includes('via BRImo') || line.startsWith('IBIZ_'));
+    const isBri = allLines.some(line => line.includes('PT. BANK RAKYAT INDONESIA') || line.includes('via BRImo') || line.startsWith('IBIZ_') || allLines.some(l => l.includes("BritAma")));
 
     if (isJenius) {
-        const jeniusDateRegex = /^\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4}/i;
         let transactionLines: string[] = [];
+        let inTransactionSection = false;
+        
+        const headerKeywords = ["DETAILS", "NOTES", "AMOUNT"];
+        const footerKeyword = "Disclaimer";
 
-        let startIndex = -1;
-        for (let i = 0; i < allLines.length; i++) {
-            const line = allLines[i].toUpperCase();
-            if (line.includes("DETAILS") && line.includes("NOTES") && line.includes("AMOUNT")) {
-                startIndex = i + 1;
-                break;
-            }
-        }
-    
-        if (startIndex !== -1) {
-            let endIndex = allLines.length;
-            for (let i = startIndex; i < allLines.length; i++) {
-                const line = allLines[i];
-                if (line.startsWith('Disclaimer') || line.startsWith('e-Statement ini sah')) {
-                    endIndex = i;
+        for (const line of allLines) {
+            const upperLine = line.toUpperCase();
+            if (inTransactionSection) {
+                if (line.startsWith(footerKeyword)) {
+                    inTransactionSection = false;
                     break;
                 }
+                transactionLines.push(line);
+            } else {
+                if (headerKeywords.every(k => upperLine.includes(k))) {
+                    inTransactionSection = true;
+                }
             }
-            transactionLines = allLines.slice(startIndex, endIndex);
-        } else {
+        }
+
+        if (transactionLines.length === 0) {
             setData([]);
             return;
         }
-        
+
+        const jeniusDateRegex = /^\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4}/i;
         const blocks: string[][] = [];
         let currentBlock: string[] = [];
 
         for (const line of transactionLines) {
             const trimmedLine = line.trim();
-            if (!trimmedLine) continue;
-
+            if (!trimmedLine || /Halaman \d+ dari \d+/.test(trimmedLine)) {
+                continue;
+            }
+            
             if (jeniusDateRegex.test(trimmedLine)) {
-                if (currentBlock.length > 0) blocks.push(currentBlock);
+                if (currentBlock.length > 0) {
+                    blocks.push(currentBlock);
+                }
                 currentBlock = [trimmedLine];
             } else if (currentBlock.length > 0) {
                 currentBlock.push(trimmedLine);
             }
         }
-        if (currentBlock.length > 0) blocks.push(currentBlock);
+        if (currentBlock.length > 0) {
+            blocks.push(currentBlock);
+        }
         
         for (const block of blocks) {
             try {
                 if (block.length === 0) continue;
             
-                const combinedText = block.join(' ');
+                let combinedText = block.join(' ').replace(/\s{2,}/g, ' ');
         
-                const dateMatch = combinedText.match(jeniusDateRegex);
-                if (!dateMatch) continue;
-                const date = dateMatch[0];
-        
-                const amountRegex = /([+-])\s+([\d,.]+)$/;
+                const amountRegex = /([+-])\s+((?:\d{1,3}(?:\.\d{3})*|\d+),\d{2})$/;
                 const amountMatch = combinedText.match(amountRegex);
         
                 if (!amountMatch) continue;
         
                 const sign = amountMatch[1];
                 const amountValue = parseCurrency(amountMatch[2]);
-        
                 const pemasukan = sign === '+' ? amountValue : 0;
                 const pengeluaran = sign === '-' ? amountValue : 0;
         
-                let description = combinedText;
+                let description = combinedText.replace(amountRegex, '').trim();
         
-                description = description.replace(amountMatch[0], '');
-                description = description.replace(date, '');
+                const dateMatch = description.match(jeniusDateRegex);
+                if (!dateMatch) continue;
+                const date = dateMatch[0];
+                description = description.replace(date, '').trim();
         
-                const timePrefixRegex = /^\s*\d{2}:\d{2}\s/;
-                description = description.replace(timePrefixRegex, '');
-        
-                const txIdRegex = /\s*\|\s*[\w@]+/;
-                description = description.replace(txIdRegex, '');
+                description = description.replace(/^\d{2}:\d{2}\s/, '').trim();
+                description = description.replace(/\s*\|\s*[\w@]+/, '').trim();
         
                 const categories = [
                     'Transfer & Payment', 'Top-up & e-Wallet', 'Fees & Charges',
@@ -236,13 +236,11 @@ export default function PdfConverter() {
                     'Bills', 'Health', 'Education', 'Investment', 'Family', 'Gift & Donation',
                     'Income', 'Uncategorized'
                 ];
-                const categoryRegex = new RegExp(`(?:${categories.join('|')})$`);
-                description = description.trim().replace(categoryRegex, '').trim();
+                const categoryRegex = new RegExp(`(?:${categories.join('|')})$`, 'i');
+                description = description.replace(categoryRegex, '').trim();
         
-                const monthYearNoteRegex = /(?:January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$/;
-                description = description.trim().replace(monthYearNoteRegex, '').trim();
-        
-                description = description.replace(/\s{2,}/g, ' ').trim();
+                const monthYearNoteRegex = /(?:January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$/i;
+                description = description.replace(monthYearNoteRegex, '').trim();
                 
                 if (!description) continue;
                 
@@ -380,30 +378,29 @@ export default function PdfConverter() {
         const startMarker = "Transaction Description";
         const endMarker = "Saldo Awal";
         const pageHeaderMarker = "Tanggal Transaksi Uraian Transaksi";
+        const footerSignature = "IBIZ_";
         
         for (const line of allLines) {
-            const trimmedLine = line.trim();
-            if (!inTransactionSection && trimmedLine.includes(startMarker)) {
+            if (line.includes(startMarker)) {
                 inTransactionSection = true;
                 continue;
             }
-            if (inTransactionSection && (trimmedLine.startsWith(endMarker) || trimmedLine.includes('Opening Balance'))) {
+            if (line.includes(endMarker)) {
                 inTransactionSection = false;
-                break;
+                continue;
             }
-            if (inTransactionSection && trimmedLine && !trimmedLine.includes(pageHeaderMarker) && !/Halaman \d+ dari \d+/.test(line) && !line.startsWith('IBIZ_') ) {
+            if (inTransactionSection) {
+                 if (!line.trim() || line.includes(pageHeaderMarker) || line.startsWith(footerSignature) || /Halaman \d+ dari \d+/.test(line)) continue;
                 transactionLines.push(line);
             }
         }
-
+        
         const blocks: string[][] = [];
         let currentBlock: string[] = [];
         const dateRegex = /^\d{2}\/\d{2}\/\d{2}/;
 
         for (const line of transactionLines) {
             const trimmed = line.trim();
-            if (!trimmed) continue;
-            
             if (dateRegex.test(trimmed)) {
                 if (currentBlock.length > 0) {
                     blocks.push(currentBlock);
@@ -422,7 +419,7 @@ export default function PdfConverter() {
         for (const block of blocks) {
             if (block.length === 0) continue;
 
-            const combinedText = block.join(' ');
+            const combinedText = block.join(' ').replace(/\s{2,}/g, ' ').trim();
             
             const dateMatch = combinedText.match(dateRegex);
             const amountMatch = combinedText.match(amountRegex);
@@ -436,10 +433,10 @@ export default function PdfConverter() {
                 let description = combinedText;
                 description = description.replace(dateRegex, '').replace(amountRegex, '').trim();
                 description = description.replace(/^\d{2}:\d{2}:\d{2}\s/, '').trim();
-                description = description.replace(/\s\d{7,8}$/, '').trim(); // Remove teller ID at the end
-
+                description = description.replace(/\s\d{7,8}$/, '').trim(); // remove teller id
+                
                 description = description.replace('BANK NEGARA INDONESIA - PT', 'BANK BNI');
-                description = description.replace(/\(PERSERO,?\sPT\s?-\s?(.*)/, '($1');
+                description = description.replace(/\(PERSERO.*?\)/g, '').replace(/\(PERSERO\b/g, '');
                 description = description.replace('BANK MANDIRI (PERSERO), PT', 'BANK MANDIRI');
 
                 description = description.replace(/\s{2,}/g, ' ').trim();
@@ -845,9 +842,9 @@ export default function PdfConverter() {
                                 }) : "0.00"}
                               </TableCell>
                               <TableCell className="text-right font-mono text-xs select-none whitespace-nowrap">
-                                {row.Saldo.toLocaleString("id-ID", {
+                                {row.Saldo > 0 ? row.Saldo.toLocaleString("id-ID", {
                                   minimumFractionDigits: 2,
-                                })}
+                                }) : "0.00"}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -941,3 +938,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
