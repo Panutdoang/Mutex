@@ -537,18 +537,6 @@ export default function PdfConverter() {
                 .map(l => l.trim());
 
             const finalParts = [...linesBeforeMain, mainDescription, ...linesAfterMain].filter(p => p);
-
-            if (finalParts.length > 1) {
-                const lastPartIndex = finalParts.length - 1;
-                const lastPart = finalParts[lastPartIndex];
-                
-                const hasLetters = /[a-zA-Z]/.test(lastPart);
-                const hasLongNumber = /\d{5,}/.test(lastPart);
-                
-                if (hasLetters && hasLongNumber && !lastPart.startsWith('No. Ref.')) {
-                    finalParts[lastPartIndex] = `(${lastPart})`;
-                }
-            }
             
             const transaksi = finalParts.join(' ').replace(/\s{2,}/g, ' ').trim();
     
@@ -1050,5 +1038,3 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
