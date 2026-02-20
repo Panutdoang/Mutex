@@ -73,16 +73,16 @@ const parseCurrency = (value: string): number => {
             return parseFloat(value.replace(/\./g, '').replace(',', '.'));
         }
     }
-    // Handle US format: 1,234,567.89 -> remove commas
-    return parseFloat(value.replace(/,/g, ''));
+     // Handle format like 1,234,567.89 (US) or 1.234.567,89 (ID)
+    return parseFloat(value.replace(/\./g, '').replace(',', '.'));
 };
 
 
 export default function PdfConverter() {
+  const [data, setData] = useState<Transaction[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<Transaction[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pdfjs, setPdfjs] = useState<any>(null);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
@@ -153,6 +153,7 @@ export default function PdfConverter() {
     const isJenius = allLines.some(line => line.includes('www.jenius.com') || line.includes('PT Bank BTPN Tbk') || line.includes('PT Bank SMBC Indonesia Tbk'));
     const isBni = allLines.some(line => line.includes('PT Bank Negara Indonesia'));
     const isBri = allLines.some(l => l.includes('PT. BANK RAKYAT INDONESIA') || l.includes('via BRImo') || l.startsWith('IBIZ_') || allLines.some(l => l.includes("BritAma")));
+    const isMandiri = allLines.some(l => l.includes('PT Bank Mandiri (Persero) Tbk.'));
 
     if (isJenius) {
         const headerLineIndex = allLines.findIndex(l => 
@@ -434,6 +435,86 @@ export default function PdfConverter() {
                     Saldo: parseCurrency(balanceStr),
                 });
             }
+        }
+    } else if (isMandiri) {
+        let inTransactionSection = false;
+        const transactionLines: string[] = [];
+        const startMarker = 'No Date Remarks Amount (IDR) Balance (IDR)';
+        const endMarkers = ['ini adalah batas akhir transaksi anda', 'Disclaimer'];
+        const repeatedHeader = 'No Tanggal Keterangan Nominal (IDR) Saldo (IDR)';
+        const footerJunk = 'PT Bank Mandiri (Persero) Tbk.';
+    
+        for (const line of allLines) {
+            if (!inTransactionSection && line.includes(startMarker)) {
+                inTransactionSection = true;
+                continue;
+            }
+            if (inTransactionSection && endMarkers.some(marker => line.startsWith(marker))) {
+                inTransactionSection = false;
+                break; 
+            }
+            if (inTransactionSection) {
+                if (line.trim() && !line.includes(repeatedHeader) && !line.includes(footerJunk) && !line.includes('Mandiri Call 14000')) {
+                    transactionLines.push(line);
+                }
+            }
+        }
+    
+        const blocks: string[][] = [];
+        let currentBlock: string[] = [];
+        const dateRegex = /\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4}/;
+    
+        for (const line of transactionLines) {
+            if (dateRegex.test(line)) {
+                if (currentBlock.length > 0) blocks.push(currentBlock);
+                currentBlock = [line];
+            } else if (currentBlock.length > 0) {
+                currentBlock.push(line);
+            }
+        }
+        if (currentBlock.length > 0) blocks.push(currentBlock);
+    
+        for (const block of blocks) {
+            const dateMatch = block[0].match(dateRegex);
+            if (!dateMatch) continue;
+            const tanggal = dateMatch[0];
+    
+            let amountLine = '';
+            let amountMatch: RegExpMatchArray | null = null;
+            
+            for (const line of block) {
+                const match = line.match(/([+\-][\d.,]+,\d{2})\s+([\d.,]+,\d{2})/);
+                if (match) {
+                    amountLine = line;
+                    amountMatch = match;
+                    break;
+                }
+            }
+            if (!amountMatch) continue;
+    
+            const nominalStr = amountMatch[1];
+            const saldoStr = amountMatch[2];
+            
+            const pemasukan = nominalStr.startsWith('+') ? parseCurrency(nominalStr.substring(1)) : 0;
+            const pengeluaran = nominalStr.startsWith('-') ? parseCurrency(nominalStr.substring(1)) : 0;
+            const saldo = parseCurrency(saldoStr);
+    
+            let combinedDescription = block.join(' ');
+            let transaksi = combinedDescription
+                .replace(dateRegex, '')
+                .replace(/([+\-][\d.,]+,\d{2})\s+([\d.,]+,\d{2})/, '')
+                .replace(/\d{2}:\d{2}:\d{2} WIB/, '')
+                .replace(/^\s*\d+\s*/, '')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
+    
+            transactions.push({
+                Tanggal: tanggal,
+                Transaksi: transaksi,
+                Pemasukan: pemasukan,
+                Pengeluaran: pengeluaran,
+                Saldo: saldo,
+            });
         }
     }
 
