@@ -209,7 +209,7 @@ export default function PdfConverter() {
                 if (!amountMatch) continue;
         
                 const sign = amountMatch[1];
-                const amountValue = parseCurrency(amountMatch[2]);
+                const amountValue = parseCurrency(amountMatch[2].replace(/,\d{2}$/, '')); // Remove trailing decimals if any
                 const pemasukan = sign === '+' ? amountValue : 0;
                 const pengeluaran = sign === '-' ? amountValue : 0;
         
@@ -445,7 +445,7 @@ export default function PdfConverter() {
         const footerJunk = 'PT Bank Mandiri (Persero) Tbk.';
     
         for (const line of allLines) {
-            if (!inTransactionSection && line.includes(startMarker)) {
+            if (!inTransactionSection && (line.includes(startMarker) || line.includes(repeatedHeader))) {
                 inTransactionSection = true;
                 continue;
             }
@@ -454,60 +454,72 @@ export default function PdfConverter() {
                 break; 
             }
             if (inTransactionSection) {
-                if (line.trim() && !line.includes(repeatedHeader) && !line.includes(footerJunk) && !line.includes('Mandiri Call 14000')) {
-                    transactionLines.push(line);
+                if (line.trim() && !line.includes(repeatedHeader) && !line.includes(footerJunk) && !line.includes('Mandiri Call 14000') && !/^\d+ of \d+$/.test(line.trim())) {
+                    transactionLines.push(line.trim());
                 }
             }
         }
     
         const blocks: string[][] = [];
         let currentBlock: string[] = [];
+        const mainLineRegex = /^\d+\s+.*[+\-][\d.,]+,\d{2}/; 
         
-        const anchorRegex = /^\d+\s+/;
-        
-        for (const line of transactionLines) {
-            if (anchorRegex.test(line.trim())) {
-                if (currentBlock.length > 0) {
-                    blocks.push(currentBlock);
-                }
-                currentBlock = [line];
-            } else {
-                currentBlock.push(line);
+        const reversedLines = [...transactionLines].reverse();
+        for (const line of reversedLines) {
+            currentBlock.unshift(line);
+            if (mainLineRegex.test(line)) {
+                blocks.unshift(currentBlock);
+                currentBlock = [];
             }
         }
         if (currentBlock.length > 0) {
-            blocks.push(currentBlock);
+            if (blocks.length > 0) {
+                 blocks[0] = [...currentBlock, ...blocks[0]];
+            } else {
+                blocks.push(currentBlock);
+            }
         }
 
         const dateRegex = /\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4}/;
         const amountRegex = /([+\-][\d.,]+,\d{2})\s+([\d.,]+,\d{2})/;
+        const anchorRegex = /^\d+\s+/;
+        const timeRegex = /\d{2}:\d{2}:\d{2} WIB/;
     
         for (const block of blocks) {
+            const mainLineIndex = block.findIndex(line => anchorRegex.test(line) && amountRegex.test(line));
+            if (mainLineIndex === -1) continue;
+            
+            const mainLine = block[mainLineIndex];
             const tanggal = block.find(line => dateRegex.test(line)) || '';
-            const mainLine = block.find(line => anchorRegex.test(line));
-
-            if (!mainLine) continue;
-
             const amountMatch = mainLine.match(amountRegex);
             if (!amountMatch) continue;
-    
+
             const nominalStr = amountMatch[1];
             const saldoStr = amountMatch[2];
             
             const pemasukan = nominalStr.startsWith('+') ? parseCurrency(nominalStr.substring(1)) : 0;
             const pengeluaran = nominalStr.startsWith('-') ? parseCurrency(nominalStr.substring(1)) : 0;
             const saldo = parseCurrency(saldoStr);
-    
-            let combinedDescription = block
-                .join(' ')
-                .replace(tanggal, '')
-                .replace(mainLine, '')
-                .trim();
             
-            let mainLineDesc = mainLine.replace(amountRegex, '').replace(anchorRegex, '').trim();
+            const mainLineDesc = mainLine.replace(anchorRegex, '').replace(amountRegex, '').trim();
 
-            let transaksi = [combinedDescription, mainLineDesc].join(' ').replace(/\d{2}:\d{2}:\d{2} WIB/, '').replace(/\s{2,}/g, ' ').trim();
+            const prefixParts = block.slice(0, mainLineIndex)
+                .map(l => l.trim())
+                .filter(l => l && !dateRegex.test(l));
+
+            const suffixParts = block.slice(mainLineIndex + 1)
+                .map(l => l.trim())
+                .filter(l => l && !timeRegex.test(l));
+            
+            const fullDescriptionParts = [...prefixParts, mainLineDesc];
+            if (suffixParts.length > 0) {
+                fullDescriptionParts.push(`(${suffixParts.join(' ')})`);
+            }
     
+            const transaksi = fullDescriptionParts.join(' ').replace(/\s{2,}/g, ' ').trim();
+    
+            if (!transaksi) continue;
+
             transactions.push({
                 Tanggal: tanggal,
                 Transaksi: transaksi,
