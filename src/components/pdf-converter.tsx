@@ -511,7 +511,8 @@ export default function PdfConverter() {
             const mainLine = block.find(line => anchorRegex.test(line) && amountRegex.test(line));
             if (!mainLine) continue;
             
-            const tanggal = block.find(line => dateRegex.test(line)) || '';
+            const dateLine = block.find(line => dateRegex.test(line));
+            const tanggal = dateLine || '';
             const amountMatch = mainLine.match(amountRegex);
             if (!amountMatch) continue;
 
@@ -522,17 +523,41 @@ export default function PdfConverter() {
             const pengeluaran = nominalStr.startsWith('-') ? parseCurrency(nominalStr.substring(1)) : 0;
             const saldo = parseCurrency(saldoStr);
             
-            const descriptionParts = block.map(line => {
-                if (dateRegex.test(line)) return null;
-                if (timeRegex.test(line)) return null;
+            const descriptionParts: string[] = [];
+            let mainDescription = '';
+            const additionalInfo: string[] = [];
 
+            for (const line of block) {
+                if (line === dateLine) continue;
+                if (timeRegex.test(line)) continue;
                 if (line === mainLine) {
-                    return line.replace(anchorRegex, '').replace(amountRegex, '').trim();
+                    mainDescription = line.replace(anchorRegex, '').replace(amountRegex, '').trim();
+                    continue;
                 }
-                return line.trim();
-            }).filter(part => part !== null && part.length > 0);
+                additionalInfo.push(line.trim());
+            }
 
-            const transaksi = descriptionParts.join(' ').replace(/\s{2,}/g, ' ').trim();
+            // Heuristic for formatting based on user examples
+            const lastInfoLine = additionalInfo.length > 1 ? additionalInfo[additionalInfo.length - 1] : null;
+            let formattedLastLine = '';
+            const mainParts: string[] = [];
+
+            if (lastInfoLine) {
+                 const hasLetters = /[a-zA-Z]/.test(lastInfoLine);
+                 const hasLongNumber = /\d{5,}/.test(lastInfoLine);
+                 if (hasLetters && hasLongNumber && !lastInfoLine.startsWith('No. Ref.')) {
+                    formattedLastLine = `(${lastInfoLine})`;
+                    mainParts.push(...additionalInfo.slice(0, additionalInfo.length - 1));
+                 } else {
+                    mainParts.push(...additionalInfo);
+                 }
+            } else {
+                 mainParts.push(...additionalInfo);
+            }
+            
+            const finalDescription = [ ...mainParts, mainDescription, formattedLastLine ].filter(p => p).join(' ');
+
+            const transaksi = finalDescription.replace(/\s{2,}/g, ' ').trim();
     
             if (!transaksi) continue;
 
