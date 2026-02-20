@@ -486,59 +486,63 @@ export default function PdfConverter() {
         const blocks: string[][] = [];
         let currentBlock: string[] = [];
         const mainLineRegex = /^\d+\s+.*/;
-        const amountRegexForMainLine = /[+\-][\d.,]+,\d{2}\s+[\d.,]+,\d{2}$/;
+        const amountRegexForMainLine = /[+\-]\s*[\d.,]+,\d{2}\s+[\d.,]+,\d{2}$/;
 
         const reversedLines = [...transactionLines].reverse();
-        for (const line of reversedLines) {
-            currentBlock.unshift(line);
-            if (mainLineRegex.test(line) && amountRegexForMainLine.test(line)) {
-                blocks.unshift(currentBlock);
-                currentBlock = [];
+        for (let i = 0; i < reversedLines.length; i++) {
+            const line = reversedLines[i];
+            const isMainLine = mainLineRegex.test(line) && amountRegexForMainLine.test(line);
+
+            if (isMainLine) {
+                if (currentBlock.length > 0) {
+                    blocks.unshift(currentBlock);
+                }
+                currentBlock = [line];
+            } else {
+                currentBlock.push(line);
             }
         }
         if (currentBlock.length > 0) {
-            if (blocks.length > 0) {
-                 blocks[0] = [...currentBlock, ...blocks[0]];
-            } else {
-                blocks.push(currentBlock);
-            }
+            blocks.unshift(currentBlock);
         }
-        
-        const dateRegex = /\d{2} (?:Jan|Feb|Mar|Apr|Mei|May|Jun|Jul|Ags|Agu|Aug|Sep|Okt|Oct|Nov|Des|Dec) \d{4}/;
-        const amountRegex = /([+\-][\d.,]+,\d{2})\s+([\d.,]+,\d{2})$/;
+
+        const dateRegex = /\d{2} (?:Jan|Feb|Mar|Apr|Mei|May|Jun|Jul|Ags|Agu|Aug|Sep|Okt|Oct|Nov|Des|Dec) \d{4}/i;
+        const amountRegex = /([+\-]\s*[\d.,]+,\d{2})\s+([\d.,]+,\d{2})$/;
         const anchorRegex = /^\d+\s+/;
         const timeRegex = /\d{2}:\d{2}:\d{2} WIB/;
     
         for (const block of blocks) {
+            const dateLine = block.find(line => dateRegex.test(line));
+            if (!dateLine) continue;
+            
+            const tanggal = dateLine;
+            
             const mainLine = block.find(line => anchorRegex.test(line) && amountRegex.test(line));
             if (!mainLine) continue;
             
-            const dateLine = block.find(line => dateRegex.test(line));
-            const tanggal = dateLine || '';
             const amountMatch = mainLine.match(amountRegex);
             if (!amountMatch) continue;
 
-            const nominalStr = amountMatch[1];
+            const nominalStr = amountMatch[1].replace(/\s/g, '');
             const saldoStr = amountMatch[2];
             
             const pemasukan = nominalStr.startsWith('+') ? parseCurrency(nominalStr.substring(1)) : 0;
             const pengeluaran = nominalStr.startsWith('-') ? parseCurrency(nominalStr.substring(1)) : 0;
             const saldo = parseCurrency(saldoStr);
 
-            const mainLineIndex = block.indexOf(mainLine);
-            const linesBeforeMain = block.slice(0, mainLineIndex)
-                .filter(l => l !== dateLine && !timeRegex.test(l))
-                .map(l => l.trim());
-            
-            const mainDescription = mainLine.replace(anchorRegex, '').replace(amountRegex, '').trim();
+            const allTextParts = block
+                .map(line => {
+                    if (line === dateLine || timeRegex.test(line)) {
+                        return '';
+                    }
+                    if (line === mainLine) {
+                        return mainLine.replace(anchorRegex, '').replace(amountRegex, '').trim();
+                    }
+                    return line.trim();
+                })
+                .filter(part => part);
 
-            const linesAfterMain = block.slice(mainLineIndex + 1)
-                .filter(l => !timeRegex.test(l))
-                .map(l => l.trim());
-
-            const finalParts = [...linesBeforeMain, mainDescription, ...linesAfterMain].filter(p => p);
-            
-            const transaksi = finalParts.join(' ').replace(/\s{2,}/g, ' ').trim();
+            const transaksi = allTextParts.join(' ').replace(/\s{2,}/g, ' ').trim();
     
             if (!transaksi) continue;
 
