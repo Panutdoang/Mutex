@@ -454,8 +454,7 @@ export default function PdfConverter() {
             'Mandiri Call 14000',
             'e-Statement',
             'Menara Mandiri 1 Jalan Jenderal Sudirman',
-            'Nama/ Name :',
-            'Cabang/ Branch :',
+            'serta merupakan peserta penjamin Lembaga Penjamin Simpanan (LPS)',
             ...startMarkers
         ];
     
@@ -472,7 +471,10 @@ export default function PdfConverter() {
 
             if (inTransactionSection) {
                 const trimmedLine = line.trim();
-                const isJunk = headerAndFooterJunk.some(junk => trimmedLine.includes(junk)) || /^\d+\s+(of|dari)\s+\d+$/.test(trimmedLine);
+                 const isJunk = headerAndFooterJunk.some(junk => trimmedLine.includes(junk)) || 
+                              /^\d+\s+(of|dari)\s+\d+$/.test(trimmedLine) ||
+                              /^Nama\/ Name :/.test(trimmedLine) ||
+                              /^Cabang\/ Branch :/.test(trimmedLine);
                 if (trimmedLine && !isJunk) {
                     transactionLines.push(trimmedLine);
                 }
@@ -481,12 +483,13 @@ export default function PdfConverter() {
     
         const blocks: string[][] = [];
         let currentBlock: string[] = [];
-        const mainLineRegex = /^\d+\s+.*/; 
-        
+        const mainLineRegex = /^\d+\s+.*/;
+        const amountRegexForMainLine = /[+\-][\d.,]+,\d{2}\s+[\d.,]+,\d{2}$/;
+
         const reversedLines = [...transactionLines].reverse();
         for (const line of reversedLines) {
             currentBlock.unshift(line);
-            if (mainLineRegex.test(line) && /[+\-][\d.,]+,\d{2}\s+[\d.,]+,\d{2}$/.test(line)) {
+            if (mainLineRegex.test(line) && amountRegexForMainLine.test(line)) {
                 blocks.unshift(currentBlock);
                 currentBlock = [];
             }
@@ -498,17 +501,16 @@ export default function PdfConverter() {
                 blocks.push(currentBlock);
             }
         }
-
+        
         const dateRegex = /\d{2} (?:Jan|Feb|Mar|Apr|Mei|May|Jun|Jul|Ags|Agu|Aug|Sep|Okt|Oct|Nov|Des|Dec) \d{4}/;
         const amountRegex = /([+\-][\d.,]+,\d{2})\s+([\d.,]+,\d{2})$/;
         const anchorRegex = /^\d+\s+/;
         const timeRegex = /\d{2}:\d{2}:\d{2} WIB/;
     
         for (const block of blocks) {
-            const mainLineIndex = block.findIndex(line => anchorRegex.test(line) && amountRegex.test(line));
-            if (mainLineIndex === -1) continue;
+            const mainLine = block.find(line => anchorRegex.test(line) && amountRegex.test(line));
+            if (!mainLine) continue;
             
-            const mainLine = block[mainLineIndex];
             const tanggal = block.find(line => dateRegex.test(line)) || '';
             const amountMatch = mainLine.match(amountRegex);
             if (!amountMatch) continue;
@@ -520,22 +522,17 @@ export default function PdfConverter() {
             const pengeluaran = nominalStr.startsWith('-') ? parseCurrency(nominalStr.substring(1)) : 0;
             const saldo = parseCurrency(saldoStr);
             
-            const mainLineDesc = mainLine.replace(anchorRegex, '').replace(amountRegex, '').trim();
+            const descriptionParts = block.map(line => {
+                if (dateRegex.test(line)) return null;
+                if (timeRegex.test(line)) return null;
 
-            const prefixParts = block.slice(0, mainLineIndex)
-                .map(l => l.trim())
-                .filter(l => l && !dateRegex.test(l));
+                if (line === mainLine) {
+                    return line.replace(anchorRegex, '').replace(amountRegex, '').trim();
+                }
+                return line.trim();
+            }).filter(part => part !== null && part.length > 0);
 
-            const suffixParts = block.slice(mainLineIndex + 1)
-                .map(l => l.trim())
-                .filter(l => l && !timeRegex.test(l));
-            
-            const fullDescriptionParts = [...prefixParts, mainLineDesc];
-            if (suffixParts.length > 0) {
-                fullDescriptionParts.push(`(${suffixParts.join(' ')})`);
-            }
-    
-            const transaksi = fullDescriptionParts.join(' ').replace(/\s{2,}/g, ' ').trim();
+            const transaksi = descriptionParts.join(' ').replace(/\s{2,}/g, ' ').trim();
     
             if (!transaksi) continue;
 
@@ -1035,6 +1032,3 @@ export default function PdfConverter() {
     </Card>
   );
 }
-
-    
-    
