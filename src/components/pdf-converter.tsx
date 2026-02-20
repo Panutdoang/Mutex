@@ -440,7 +440,7 @@ export default function PdfConverter() {
         let inTransactionSection = false;
         const transactionLines: string[] = [];
         const startMarker = 'No Date Remarks Amount (IDR) Balance (IDR)';
-        const endMarkers = ['ini adalah batas akhir transaksi anda', 'Disclaimer'];
+        const endMarker = 'ini adalah batas akhir transaksi anda';
         const repeatedHeader = 'No Tanggal Keterangan Nominal (IDR) Saldo (IDR)';
         const footerJunk = 'PT Bank Mandiri (Persero) Tbk.';
     
@@ -449,7 +449,7 @@ export default function PdfConverter() {
                 inTransactionSection = true;
                 continue;
             }
-            if (inTransactionSection && endMarkers.some(marker => line.startsWith(marker))) {
+            if (inTransactionSection && line.startsWith(endMarker)) {
                 inTransactionSection = false;
                 break; 
             }
@@ -462,34 +462,33 @@ export default function PdfConverter() {
     
         const blocks: string[][] = [];
         let currentBlock: string[] = [];
-        const dateRegex = /\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4}/;
-    
+        
+        const anchorRegex = /^\d+\s+/;
+        
         for (const line of transactionLines) {
-            if (dateRegex.test(line)) {
-                if (currentBlock.length > 0) blocks.push(currentBlock);
+            if (anchorRegex.test(line.trim())) {
+                if (currentBlock.length > 0) {
+                    blocks.push(currentBlock);
+                }
                 currentBlock = [line];
-            } else if (currentBlock.length > 0) {
+            } else {
                 currentBlock.push(line);
             }
         }
-        if (currentBlock.length > 0) blocks.push(currentBlock);
+        if (currentBlock.length > 0) {
+            blocks.push(currentBlock);
+        }
+
+        const dateRegex = /\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4}/;
+        const amountRegex = /([+\-][\d.,]+,\d{2})\s+([\d.,]+,\d{2})/;
     
         for (const block of blocks) {
-            const dateMatch = block[0].match(dateRegex);
-            if (!dateMatch) continue;
-            const tanggal = dateMatch[0];
-    
-            let amountLine = '';
-            let amountMatch: RegExpMatchArray | null = null;
-            
-            for (const line of block) {
-                const match = line.match(/([+\-][\d.,]+,\d{2})\s+([\d.,]+,\d{2})/);
-                if (match) {
-                    amountLine = line;
-                    amountMatch = match;
-                    break;
-                }
-            }
+            const tanggal = block.find(line => dateRegex.test(line)) || '';
+            const mainLine = block.find(line => anchorRegex.test(line));
+
+            if (!mainLine) continue;
+
+            const amountMatch = mainLine.match(amountRegex);
             if (!amountMatch) continue;
     
             const nominalStr = amountMatch[1];
@@ -499,14 +498,15 @@ export default function PdfConverter() {
             const pengeluaran = nominalStr.startsWith('-') ? parseCurrency(nominalStr.substring(1)) : 0;
             const saldo = parseCurrency(saldoStr);
     
-            let combinedDescription = block.join(' ');
-            let transaksi = combinedDescription
-                .replace(dateRegex, '')
-                .replace(/([+\-][\d.,]+,\d{2})\s+([\d.,]+,\d{2})/, '')
-                .replace(/\d{2}:\d{2}:\d{2} WIB/, '')
-                .replace(/^\s*\d+\s*/, '')
-                .replace(/\s{2,}/g, ' ')
+            let combinedDescription = block
+                .join(' ')
+                .replace(tanggal, '')
+                .replace(mainLine, '')
                 .trim();
+            
+            let mainLineDesc = mainLine.replace(amountRegex, '').replace(anchorRegex, '').trim();
+
+            let transaksi = [combinedDescription, mainLineDesc].join(' ').replace(/\d{2}:\d{2}:\d{2} WIB/, '').replace(/\s{2,}/g, ' ').trim();
     
             transactions.push({
                 Tanggal: tanggal,
