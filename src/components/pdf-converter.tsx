@@ -446,35 +446,47 @@ export default function PdfConverter() {
     } else if (isMandiri) {
         let inTransactionSection = false;
         const transactionLines: string[] = [];
-        const startMarker = 'No Date Remarks Amount (IDR) Balance (IDR)';
+        const startMarkers = ['No Date Remarks Amount (IDR) Balance (IDR)', 'No Tanggal Keterangan Nominal (IDR) Saldo (IDR)'];
         const endMarker = 'ini adalah batas akhir transaksi anda';
-        const repeatedHeader = 'No Tanggal Keterangan Nominal (IDR) Saldo (IDR)';
-        const footerJunk = 'PT Bank Mandiri (Persero) Tbk.';
+        
+        const headerAndFooterJunk = [
+            'PT Bank Mandiri (Persero) Tbk.',
+            'Mandiri Call 14000',
+            'e-Statement',
+            'Menara Mandiri 1 Jalan Jenderal Sudirman',
+            'Nama/ Name :',
+            'Cabang/ Branch :',
+            ...startMarkers
+        ];
     
         for (const line of allLines) {
-            if (!inTransactionSection && (line.includes(startMarker) || line.includes(repeatedHeader))) {
+            if (!inTransactionSection && startMarkers.some(marker => line.includes(marker))) {
                 inTransactionSection = true;
-                continue;
+                continue; 
             }
+            
             if (inTransactionSection && line.startsWith(endMarker)) {
                 inTransactionSection = false;
                 break; 
             }
+
             if (inTransactionSection) {
-                if (line.trim() && !line.includes(repeatedHeader) && !line.includes(footerJunk) && !line.includes('Mandiri Call 14000') && !/^\d+ of \d+$/.test(line.trim())) {
-                    transactionLines.push(line.trim());
+                const trimmedLine = line.trim();
+                const isJunk = headerAndFooterJunk.some(junk => trimmedLine.includes(junk)) || /^\d+\s+(of|dari)\s+\d+$/.test(trimmedLine);
+                if (trimmedLine && !isJunk) {
+                    transactionLines.push(trimmedLine);
                 }
             }
         }
     
         const blocks: string[][] = [];
         let currentBlock: string[] = [];
-        const mainLineRegex = /^\d+\s+.*[+\-][\d.,]+,\d{2}/; 
+        const mainLineRegex = /^\d+\s+.*/; 
         
         const reversedLines = [...transactionLines].reverse();
         for (const line of reversedLines) {
             currentBlock.unshift(line);
-            if (mainLineRegex.test(line)) {
+            if (mainLineRegex.test(line) && /[+\-][\d.,]+,\d{2}\s+[\d.,]+,\d{2}$/.test(line)) {
                 blocks.unshift(currentBlock);
                 currentBlock = [];
             }
@@ -488,7 +500,7 @@ export default function PdfConverter() {
         }
 
         const dateRegex = /\d{2} (?:Jan|Feb|Mar|Apr|Mei|May|Jun|Jul|Ags|Agu|Aug|Sep|Okt|Oct|Nov|Des|Dec) \d{4}/;
-        const amountRegex = /([+\-][\d.,]+,\d{2})\s+([\d.,]+,\d{2})/;
+        const amountRegex = /([+\-][\d.,]+,\d{2})\s+([\d.,]+,\d{2})$/;
         const anchorRegex = /^\d+\s+/;
         const timeRegex = /\d{2}:\d{2}:\d{2} WIB/;
     
@@ -1024,4 +1036,5 @@ export default function PdfConverter() {
   );
 }
 
+    
     
