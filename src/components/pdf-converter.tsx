@@ -74,7 +74,14 @@ const parseCurrency = (value: string): number => {
         }
     }
      // Handle format like 1,234,567.89 (US) or 1.234.567,89 (ID)
-    return parseFloat(value.replace(/\./g, '').replace(',', '.'));
+    return parseFloat(value.replace(/[,.]/g, (match, offset, string) => {
+        // If it's the last comma/dot and it's followed by 2 digits, it's a decimal separator
+        if (string.length - offset <= 3) {
+            return '.';
+        }
+        // Otherwise it's a thousands separator, so remove it
+        return '';
+    }));
 };
 
 
@@ -174,7 +181,7 @@ export default function PdfConverter() {
             footerLineIndex !== -1 ? footerLineIndex : allLines.length
         );
 
-        const jeniusDateRegex = /^\d{1,2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4}/i;
+        const jeniusDateRegex = /^\d{1,2} (?:Jan|Feb|Mar|Apr|Mei|May|Jun|Jul|Ags|Agu|Aug|Sep|Okt|Oct|Nov|Des|Dec) \d{4}/i;
         const blocks: string[][] = [];
         let currentBlock: string[] = [];
 
@@ -244,7 +251,7 @@ export default function PdfConverter() {
         transactions.reverse();
 
     } else if (isBni) {
-        const bniDateRegex = /^(\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4})/;
+        const bniDateRegex = /^(\d{2} (?:Jan|Feb|Mar|Apr|Mei|May|Jun|Jul|Ags|Agu|Aug|Sep|Okt|Oct|Nov|Des|Dec) \d{4})/;
         const bniAmountRegex = /([+-][\d,.]+)\s+([\d,.]+)$/;
         
         let inTransactionSection = false;
@@ -480,7 +487,7 @@ export default function PdfConverter() {
             }
         }
 
-        const dateRegex = /\d{2} (?:Jan|Feb|Mar|Apr|Mei|Jun|Jul|Ags|Agu|Sep|Okt|Nov|Des) \d{4}/;
+        const dateRegex = /\d{2} (?:Jan|Feb|Mar|Apr|Mei|May|Jun|Jul|Ags|Agu|Aug|Sep|Okt|Oct|Nov|Des|Dec) \d{4}/;
         const amountRegex = /([+\-][\d.,]+,\d{2})\s+([\d.,]+,\d{2})/;
         const anchorRegex = /^\d+\s+/;
         const timeRegex = /\d{2}:\d{2}:\d{2} WIB/;
