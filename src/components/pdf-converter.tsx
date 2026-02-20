@@ -210,13 +210,13 @@ export default function PdfConverter() {
                 if (block.length < 1) continue;
         
                 const firstLine = block[0];
-                const amountRegex = /([+-])\s+([\d,.]+)$/;
+                const amountRegex = /([+-])\s+([\d,.]+)\s*$/;
                 const amountMatch = firstLine.match(amountRegex);
         
                 if (!amountMatch) continue;
         
                 const sign = amountMatch[1];
-                const amountValue = parseCurrency(amountMatch[2].replace(/,\d{2}$/, '')); // Remove trailing decimals if any
+                const amountValue = parseCurrency(amountMatch[2].replace(/,\d{2}$/, ''));
                 const pemasukan = sign === '+' ? amountValue : 0;
                 const pengeluaran = sign === '-' ? amountValue : 0;
         
@@ -228,8 +228,8 @@ export default function PdfConverter() {
         
                 const notes = block.slice(1)
                     .map(line => {
-                        if (line.includes('|')) return '';
-                        return line.replace(/^\d{2}:\d{2}\s*/, '').trim();
+                        if (line.includes('|') || /^\d{2}:\d{2}\s*/.test(line)) return '';
+                        return line.trim();
                     })
                     .filter(line => line.length > 0);
         
@@ -455,6 +455,8 @@ export default function PdfConverter() {
             'e-Statement',
             'Menara Mandiri 1 Jalan Jenderal Sudirman',
             'serta merupakan peserta penjamin Lembaga Penjamin Simpanan (LPS)',
+            'Nama/ Name :',
+            'Cabang/ Branch :',
             ...startMarkers
         ];
     
@@ -473,8 +475,8 @@ export default function PdfConverter() {
                 const trimmedLine = line.trim();
                  const isJunk = headerAndFooterJunk.some(junk => trimmedLine.includes(junk)) || 
                               /^\d+\s+(of|dari)\s+\d+$/.test(trimmedLine) ||
-                              /^Nama\/ Name :/.test(trimmedLine) ||
-                              /^Cabang\/ Branch :/.test(trimmedLine);
+                              /^Dicetak pada\//.test(trimmedLine) ||
+                              /^Periode\//.test(trimmedLine);
                 if (trimmedLine && !isJunk) {
                     transactionLines.push(trimmedLine);
                 }
@@ -522,42 +524,33 @@ export default function PdfConverter() {
             const pemasukan = nominalStr.startsWith('+') ? parseCurrency(nominalStr.substring(1)) : 0;
             const pengeluaran = nominalStr.startsWith('-') ? parseCurrency(nominalStr.substring(1)) : 0;
             const saldo = parseCurrency(saldoStr);
-            
-            const descriptionParts: string[] = [];
-            let mainDescription = '';
-            const additionalInfo: string[] = [];
 
-            for (const line of block) {
-                if (line === dateLine) continue;
-                if (timeRegex.test(line)) continue;
-                if (line === mainLine) {
-                    mainDescription = line.replace(anchorRegex, '').replace(amountRegex, '').trim();
-                    continue;
+            const mainLineIndex = block.indexOf(mainLine);
+            const linesBeforeMain = block.slice(0, mainLineIndex)
+                .filter(l => l !== dateLine && !timeRegex.test(l))
+                .map(l => l.trim());
+            
+            const mainDescription = mainLine.replace(anchorRegex, '').replace(amountRegex, '').trim();
+
+            const linesAfterMain = block.slice(mainLineIndex + 1)
+                .filter(l => !timeRegex.test(l))
+                .map(l => l.trim());
+
+            const finalParts = [...linesBeforeMain, mainDescription, ...linesAfterMain].filter(p => p);
+
+            if (finalParts.length > 1) {
+                const lastPartIndex = finalParts.length - 1;
+                const lastPart = finalParts[lastPartIndex];
+                
+                const hasLetters = /[a-zA-Z]/.test(lastPart);
+                const hasLongNumber = /\d{5,}/.test(lastPart);
+                
+                if (hasLetters && hasLongNumber && !lastPart.startsWith('No. Ref.')) {
+                    finalParts[lastPartIndex] = `(${lastPart})`;
                 }
-                additionalInfo.push(line.trim());
-            }
-
-            // Heuristic for formatting based on user examples
-            const lastInfoLine = additionalInfo.length > 1 ? additionalInfo[additionalInfo.length - 1] : null;
-            let formattedLastLine = '';
-            const mainParts: string[] = [];
-
-            if (lastInfoLine) {
-                 const hasLetters = /[a-zA-Z]/.test(lastInfoLine);
-                 const hasLongNumber = /\d{5,}/.test(lastInfoLine);
-                 if (hasLetters && hasLongNumber && !lastInfoLine.startsWith('No. Ref.')) {
-                    formattedLastLine = `(${lastInfoLine})`;
-                    mainParts.push(...additionalInfo.slice(0, additionalInfo.length - 1));
-                 } else {
-                    mainParts.push(...additionalInfo);
-                 }
-            } else {
-                 mainParts.push(...additionalInfo);
             }
             
-            const finalDescription = [ ...mainParts, mainDescription, formattedLastLine ].filter(p => p).join(' ');
-
-            const transaksi = finalDescription.replace(/\s{2,}/g, ' ').trim();
+            const transaksi = finalParts.join(' ').replace(/\s{2,}/g, ' ').trim();
     
             if (!transaksi) continue;
 
@@ -1057,3 +1050,5 @@ export default function PdfConverter() {
     </Card>
   );
 }
+
+    
