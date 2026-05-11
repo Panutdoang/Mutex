@@ -1,19 +1,39 @@
-# **App Name**: FarmFin PDF to Excel
+# App Name: Mutex
 
-## Core Features:
+## Product Goal
 
-- PDF Upload Interface: Provide a responsive drag-and-drop area for users to easily upload PDF bank statement files directly within their browser.
-- Client-Side PDF Parsing: Utilize 'pdfjs-dist' to securely read and extract all text content from the uploaded PDF file entirely on the user's device, ensuring financial data privacy.
-- Intelligent Data Extraction & Cleaning: Implement advanced client-side logic to parse the extracted PDF text, identify patterns for Date, Description, Debit, Kredit, and Saldo. This includes a tool for text cleaning to remove headers, footers, or page numbers, and accurate separation of nominal values based on signs or 'DB'/'CR' indicators.
-- Interactive Data Preview Table: Display the extracted and cleaned financial data in a structured, readable table format directly in the application UI, allowing users to review the parsed information before export.
-- Excel Generation & Download: Leverage 'xlsx' or 'SheetJS' to convert the validated data from the preview table into an .xlsx file, with a 'Download Excel' button to allow users to save it with specified columns: Tanggal, Deskripsi, Debit, Kredit, Saldo.
+Mutex helps users convert monthly Indonesian bank statement PDFs into spreadsheet-ready Excel reports without uploading financial data to a server.
 
-## Style Guidelines:
+## Core Features
 
-- The color palette is inspired by themes of clarity and natural groundedness, reflecting both financial precision and the agricultural context. The scheme is light, prioritizing readability and a modern aesthetic.
-- Primary color: A sophisticated, muted blue (#4573A1) that signifies reliability and analytical clarity, offering strong contrast against the light background.
-- Background color: A very subtle, cool-toned off-white (#EEF1F3) with a hint of blue, designed to provide a spacious and clean canvas for the data and UI elements.
-- Accent color: A vibrant yet harmonious cyan (#58DBDB) to draw attention to interactive elements, calls to action, and highlights, providing a fresh contrast to the primary blue.
-- Body and headline font: 'Inter' (sans-serif), chosen for its exceptional readability across various screen sizes, modern aesthetic, and suitability for data-heavy financial reports, aligning with the clean UI provided by Tailwind CSS.
-- Utilize a consistent set of clean, minimalist vector icons from a library like Heroicons, focusing on clarity for actions like 'upload', 'preview', and 'download' to maintain a professional and user-friendly interface.
-- A responsive, single-column layout optimized for easy navigation and clear display of data on both desktop and mobile devices. The drag-and-drop area will be prominently featured at the top, followed by the preview table and action buttons.
+- PDF upload interface: responsive drag-and-drop upload for bank statement PDF files.
+- Client-side PDF parsing: use `pdfjs-dist` in the browser and load the PDF worker locally from `public/pdf.worker.min.mjs`.
+- Password support: prompt users for a PDF password when the document is protected.
+- Bank-specific extraction: parse raw PDF text into `Tanggal`, `Transaksi`, `Pemasukan`, `Pengeluaran`, and `Saldo`.
+- Preview table: show parsed transactions before export.
+- Raw text debugging: expose extracted text so unsupported formats can be diagnosed.
+- Excel generation: dynamically load `exceljs` only when the user downloads an `.xlsx` report.
+
+## Supported Banks
+
+- Jenius / BTPN / SMBC Indonesia
+- BNI
+- BRI / BRImo / BritAma
+- Mandiri
+
+## Parser Maintenance
+
+Each bank parser lives in its own module under `src/lib/parsers`. When adding or fixing a bank format:
+
+1. Add an anonymized raw text fixture to `src/lib/parsers/__fixtures__`.
+2. Update or add the bank parser module.
+3. Add assertions in `src/lib/parsers/bank-statement.test.ts`.
+4. Run `npm run test:parsers`, `npm run typecheck`, and `npm run build`.
+
+## Style Guidelines
+
+- Keep the UI focused on the working conversion flow rather than a landing page.
+- Use clear upload, preview, and download states.
+- Keep financial tables compact, readable, and horizontally scrollable on small screens.
+- Preserve privacy messaging without implying server-side deletion, because files are processed locally in the browser.
+- Use the existing muted blue/cyan theme and neumorphic shadows conservatively.

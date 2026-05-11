@@ -1,0 +1,7 @@
+PT Bank Mandiri (Persero) Tbk.
+No Tanggal Keterangan Nominal (IDR) Saldo (IDR)
+01 Jan 2026
+1 TRANSFER MASUK + 500.000,00 1.500.000,00
+02 Jan 2026
+2 QRIS PAYMENT - 25.000,00 1.475.000,00
+ini adalah batas akhir transaksi anda
